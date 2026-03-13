@@ -54,7 +54,6 @@
             const [editingStudent, setEditingStudent] = useState(null);
             const [showGroupModal, setShowGroupModal] = useState(false);
 
-            // 로컬 스토리지 동기화
             useEffect(() => {
                 localStorage.setItem('att_groups', JSON.stringify(groups));
                 localStorage.setItem('att_active_group', activeGroupId);
@@ -75,7 +74,7 @@
                 );
             }, [students, activeGroupId, searchQuery]);
 
-            // --- 관리 기능 ---
+            // --- 기능 로직 ---
             const toggleStudentTarget = (studentId, type) => {
                 setStudents(students.map(s => {
                     if (s.id === studentId) {
@@ -112,66 +111,15 @@
                 setTimeout(() => { el.focus(); el.setSelectionRange(start + tag.length, start + tag.length); }, 10);
             };
 
-            // --- 파일 처리 ---
-            const downloadTemplate = () => {
-                const csv = "\ufeff학급,이름,본인번호,부번호,모번호,메모\n1반,홍길동,010-0000-0000,010-1111-1111,010-2222-2222,비고내용";
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = '출결명단_입력양식.csv'; a.click();
-            };
-
-            const handleFileUpload = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (evt) => {
-                    const rows = evt.target.result.split(/\r?\n/).filter(l => l.trim() !== '');
-                    const newGrps = new Set(groups);
-                    const newStus = rows.slice(1).map((row, i) => {
-                        const c = row.split(',').map(v => v.trim().replace(/"/g, ''));
-                        let gName = c[0] || '1반';
-                        if (gName.startsWith('010')) gName = '미분류';
-                        if (gName) newGrps.add(gName);
-                        return { 
-                            id: Date.now()+i+Math.random(), group: gName, name: c[1] || '이름없음', self: c[2] || '', father: c[3] || '', mother: c[4] || '', memo: c[5] || '',
-                            activeTargets: { self: true, father: false, mother: false }
-                        };
-                    }).filter(s => s.name !== '이름없음');
-                    setGroups(Array.from(newGrps));
-                    setStudents([...students, ...newStus]);
-                };
-                reader.readAsText(file, 'EUC-KR');
-            };
-
-            const exportData = () => {
-                const data = { groups, students, templates, teacherName };
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `출결_백업.json`; a.click();
-            };
-
-            const importData = (e) => {
-                const file = e.target.files[0];
-                const reader = new FileReader();
-                reader.onload = (evt) => {
-                    const d = JSON.parse(evt.target.result);
-                    setGroups(d.groups); setStudents(d.students); setTemplates(d.templates); alert("복구 완료!");
-                };
-                reader.readAsText(file);
-            };
-
-            // --- 실행 ---
             const makeCall = (s) => {
                 const targets = s.activeTargets || { self: true };
                 let p = targets.self && s.self ? s.self : (targets.father && s.father ? s.father : s.mother);
                 if (!p) p = s.self || s.father || s.mother;
-                if (p) window.location.href = `tel:${p}`; else alert("번호 없음");
+                if (p) window.location.href = `tel:${p}`; else alert("연락처가 없습니다.");
             };
 
             const sendSMS = (targets, tp) => {
-                const time = currentTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+                const timeStr = currentTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
                 const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
                 targets.forEach(s => {
                     const activeT = s.activeTargets || { self: true, father: false, mother: false };
@@ -180,7 +128,7 @@
                     if (activeT.father && s.father) rec.push(s.father);
                     if (activeT.mother && s.mother) rec.push(s.mother);
                     if (rec.length === 0) return;
-                    const msg = tp.content.replace(/{이름}/g, s.name).replace(/{시간}/g, time).replace(/{교사}/g, teacherName);
+                    const msg = tp.content.replace(/{이름}/g, s.name).replace(/{시간}/g, timeStr).replace(/{교사}/g, teacherName);
                     window.open(`sms:${rec.join(',')}${isIos ? '&' : '?'}body=${encodeURIComponent(msg)}`, '_blank');
                 });
             };
@@ -190,9 +138,9 @@
                     <header className="p-6 bg-blue-600 text-white sticky top-0 z-30 shadow-md">
                         <div className="flex justify-between items-center mb-4 font-black italic uppercase text-2xl tracking-tighter">
                             <h1>Attendance Pro</h1>
-                            <span className="text-[10px] bg-white/20 px-2 py-1 rounded-full">{currentTime.toLocaleTimeString()}</span>
+                            <span className="text-[10px] bg-white/20 px-2 py-1 rounded-full font-bold">{currentTime.toLocaleTimeString()}</span>
                         </div>
-                        <input value={teacherName} onChange={e => setTeacherName(e.target.value)} className="bg-white/10 p-3 rounded-2xl w-full border-none outline-none font-bold shadow-inner" placeholder="선생님 성함" />
+                        <input value={teacherName} onChange={e => setTeacherName(e.target.value)} className="bg-white/10 p-3 rounded-2xl w-full border-none outline-none font-bold placeholder:text-blue-100 shadow-inner" placeholder="선생님 성함" />
                     </header>
 
                     <nav className="flex border-b bg-white sticky top-[136px] z-30 shadow-sm">
@@ -203,7 +151,7 @@
                         ))}
                     </nav>
 
-                    <main className="flex-1 p-4 bg-slate-50 overflow-y-auto no-scrollbar pb-40">
+                    <main className="flex-1 p-4 bg-slate-50 overflow-y-auto no-scrollbar pb-48">
                         {activeTab === 'list' && (
                             <div className="animate-in space-y-4">
                                 <div className="space-y-3">
@@ -214,12 +162,6 @@
                                         ))}
                                     </div>
                                     <input placeholder="학생 이름 검색" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full px-4 py-3 rounded-2xl shadow-sm outline-none border-none font-medium text-sm" />
-                                    <div className="flex gap-2 text-[11px] font-black">
-                                        <button onClick={downloadTemplate} className="flex-1 bg-white border border-slate-200 py-3.5 rounded-2xl text-blue-600 active:bg-blue-50">양식 받기</button>
-                                        <label className="flex-1 bg-blue-600 border border-blue-600 py-3.5 rounded-2xl text-white text-center cursor-pointer shadow-lg active:scale-95 transition-all">
-                                            명단 올리기 <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
-                                        </label>
-                                    </div>
                                 </div>
 
                                 <div className="space-y-3">
@@ -235,10 +177,20 @@
                                                     <div className="font-bold text-slate-800 text-sm">{s.name} <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded-lg text-slate-400 font-medium ml-1">{s.group}</span></div>
                                                     {s.memo && <div className="text-[9px] text-blue-500 font-medium truncate mt-0.5"><i className="fa-solid fa-note-sticky mr-1"></i>{s.memo}</div>}
                                                 </div>
-                                                <div className="flex gap-1.5">
+                                                
+                                                {/* 개별 발송 버튼 영역 (모든 템플릿 한글 버튼 자동 생성) */}
+                                                <div className="flex flex-wrap gap-1 justify-end max-w-[140px]">
                                                     <button onClick={() => makeCall(s)} className="w-8 h-8 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center text-[10px] active:scale-90"><i className="fa-solid fa-phone"></i></button>
-                                                    {templates.slice(0, 2).map((tp, idx) => (
-                                                        <button key={tp.id} onClick={() => sendSMS([s], tp)} className={`px-3 h-8 rounded-xl flex items-center justify-center text-[10px] font-black active:scale-90 transition-transform ${idx === 0 ? 'bg-rose-50 text-rose-500' : 'bg-amber-50 text-amber-500'}`}>
+                                                    {templates.map((tp, idx) => (
+                                                        <button 
+                                                            key={tp.id} 
+                                                            onClick={() => sendSMS([s], tp)} 
+                                                            className={`px-2.5 h-8 rounded-xl flex items-center justify-center text-[10px] font-black active:scale-90 transition-transform ${
+                                                                idx === 0 ? 'bg-rose-50 text-rose-500' : 
+                                                                idx === 1 ? 'bg-amber-50 text-amber-500' : 
+                                                                'bg-blue-50 text-blue-500'
+                                                            }`}
+                                                        >
                                                             {tp.title}
                                                         </button>
                                                     ))}
@@ -260,10 +212,10 @@
                             <div className="animate-in space-y-4 pb-10">
                                 {templates.map(tp => (
                                     <div key={tp.id} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-                                        <input value={tp.title} onChange={e => setTemplates(templates.map(t=>t.id===tp.id?{...t,title:e.target.value}:t))} className="w-full font-black text-blue-600 border-b pb-2 mb-3 outline-none border-slate-50 focus:border-blue-200" placeholder="제목 (버튼 이름)" />
+                                        <input value={tp.title} onChange={e => setTemplates(templates.map(t=>t.id===tp.id?{...t,title:e.target.value}:t))} className="w-full font-black text-blue-600 border-b pb-2 mb-3 outline-none border-slate-50 focus:border-blue-200" placeholder="제목" />
                                         <div className="flex gap-1 mb-2 overflow-x-auto no-scrollbar">
                                             {['{이름}', '{시간}', '{교사}'].map(tag => (
-                                                <button key={tag} onClick={() => insertTag(tp.id, tag)} className="bg-slate-100 text-[10px] px-2.5 py-1.5 rounded-lg font-black text-slate-500 whitespace-nowrap">{tag.replace('{','').replace('}','')} 삽입</button>
+                                                <button key={tag} onClick={() => insertTag(tp.id, tag)} className="bg-slate-100 text-[10px] px-2.5 py-1.5 rounded-lg font-black text-slate-500 whitespace-nowrap active:bg-slate-200">{tag.replace('{','').replace('}','')} 삽입</button>
                                             ))}
                                         </div>
                                         <textarea id={`textarea-${tp.id}`} value={tp.content} onChange={e => setTemplates(templates.map(t=>t.id===tp.id?{...t,content:e.target.value}:t))} className="w-full text-xs text-slate-500 bg-slate-50 p-4 rounded-2xl min-h-[100px] outline-none leading-relaxed" />
@@ -271,66 +223,54 @@
                                     </div>
                                 ))}
                                 <button onClick={() => setTemplates([...templates,{id:'t'+Date.now(),title:'새 문구',content:''}])} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-3xl text-slate-300 font-bold active:bg-white transition-colors">+ 새로운 문구 추가</button>
-                                <div className="mt-12 pt-8 border-t flex gap-2">
-                                    <button onClick={exportData} className="flex-1 bg-slate-900 text-white py-4 rounded-3xl text-[11px] font-black shadow-lg">전체 백업</button>
-                                    <label className="flex-1 bg-white border-2 py-4 rounded-3xl text-[11px] font-black text-slate-500 text-center cursor-pointer shadow-sm">
-                                        데이터 복구 <input type="file" accept=".json" onChange={importData} className="hidden" />
-                                    </label>
-                                </div>
                             </div>
                         )}
                     </main>
 
+                    {/* 선택 시 하단 플로팅 바 (중앙 정렬 수정 완료) */}
                     {selectedIds.length > 0 && activeTab === 'list' && (
-                        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm bg-slate-900/95 backdrop-blur-md p-6 rounded-[40px] shadow-2xl z-50 animate-in border border-white/10 flex flex-col gap-4">
-                            <div className="flex justify-between px-2 items-center text-white font-black text-sm">
+                        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm bg-slate-900/95 backdrop-blur-md p-6 rounded-[40px] shadow-2xl z-50 animate-in border border-white/10">
+                            <div className="flex justify-between px-2 items-center text-white font-black text-sm mb-4">
                                 <span>{selectedIds.length}명 선택됨</span>
-                                <button onClick={deleteSelectedStudents} className="bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-xl text-[10px] font-bold active:scale-90 transition-transform"><i className="fa-solid fa-trash-can mr-1"></i>선택 삭제</button>
+                                <button onClick={deleteSelectedStudents} className="bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-xl text-[10px] font-bold active:scale-95"><i className="fa-solid fa-trash-can mr-1"></i>선택 삭제</button>
                             </div>
-                            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                            <div className="flex flex-wrap gap-2 justify-center pb-1">
                                 {templates.map(tp => (
-                                    <button key={tp.id} onClick={() => sendSMS(students.filter(s=>selectedIds.includes(s.id)), tp)} className="flex-shrink-0 bg-blue-600 text-white px-5 py-3.5 rounded-2xl font-black text-xs whitespace-nowrap active:bg-blue-500 transition-colors">
-                                        단체 {tp.title} 발송
+                                    <button 
+                                        key={tp.id} 
+                                        onClick={() => sendSMS(students.filter(s=>selectedIds.includes(s.id)), tp)} 
+                                        className="bg-blue-600 text-white px-4 py-3 rounded-2xl font-black text-[11px] shadow-lg active:bg-blue-500 transition-colors whitespace-nowrap"
+                                    >
+                                        {tp.title} 발송
                                     </button>
                                 ))}
-                                <button onClick={() => setSelectedIds([])} className="px-4 py-3.5 bg-slate-700 text-white rounded-2xl font-black text-xs">취소</button>
+                                <button onClick={() => setSelectedIds([])} className="px-5 py-3 bg-slate-700 text-white rounded-2xl font-black text-[11px]">취소</button>
                             </div>
                         </div>
                     )}
 
                     {activeTab === 'list' && selectedIds.length === 0 && (
-                        <button onClick={() => { setEditingStudent(null); setShowAddModal(true); }} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center text-xl z-40 shadow-blue-200"><i className="fa-solid fa-plus"></i></button>
+                        <button onClick={() => { setEditingStudent(null); setShowAddModal(true); }} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center text-xl z-40 shadow-blue-200 active:scale-90 transition-transform"><i className="fa-solid fa-plus"></i></button>
                     )}
 
+                    {/* 수정 및 추가 모달 */}
                     {showAddModal && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-6">
                             <div className="bg-white w-full rounded-[44px] p-8 animate-in shadow-2xl overflow-y-auto max-h-[90vh] border border-white/20">
-                                <h3 className="text-xl font-black mb-6 text-blue-600 text-center">{editingStudent ? '정보 수정' : '직접 추가'}</h3>
+                                <h3 className="text-xl font-black mb-6 text-blue-600 text-center">{editingStudent ? '정보 수정' : '학생 직접 추가'}</h3>
                                 <div className="space-y-4 text-xs font-bold">
                                     <div className="grid grid-cols-2 gap-2">
-                                        <div className="space-y-1">
-                                            <label className="px-1 text-slate-400 font-black">학급</label>
-                                            <select className="w-full p-4 bg-slate-50 rounded-2xl outline-none" value={editingStudent?.group || (activeGroupId === '전체' ? groups[0] : activeGroupId)} onChange={e => setEditingStudent({...editingStudent, group: e.target.value})}>
-                                                {groups.map(g => <option key={g} value={g}>{g}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="px-1 text-slate-400 font-black">이름</label>
-                                            <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-blue-500" value={editingStudent?.name || ''} onChange={e => setEditingStudent({...editingStudent, name: e.target.value})} placeholder="성함" />
-                                        </div>
+                                        <select className="w-full p-4 bg-slate-50 rounded-2xl outline-none" value={editingStudent?.group || (activeGroupId === '전체' ? groups[0] : activeGroupId)} onChange={e => setEditingStudent({...editingStudent, group: e.target.value})}>
+                                            {groups.map(g => <option key={g} value={g}>{g}</option>)}
+                                        </select>
+                                        <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-blue-500 font-bold" value={editingStudent?.name || ''} onChange={e => setEditingStudent({...editingStudent, name: e.target.value})} placeholder="이름" />
                                     </div>
-                                    <div className="space-y-1">
-                                        <label className="px-1 text-slate-400 font-black">본인 번호</label>
-                                        <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-medium" value={editingStudent?.self || ''} onChange={e => setEditingStudent({...editingStudent, self: e.target.value})} placeholder="010-0000-0000" />
-                                    </div>
+                                    <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-medium" value={editingStudent?.self || ''} onChange={e => setEditingStudent({...editingStudent, self: e.target.value})} placeholder="본인 번호" />
                                     <div className="grid grid-cols-2 gap-2 font-medium">
                                         <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none" value={editingStudent?.father || ''} onChange={e => setEditingStudent({...editingStudent, father: e.target.value})} placeholder="부 번호" />
                                         <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none" value={editingStudent?.mother || ''} onChange={e => setEditingStudent({...editingStudent, mother: e.target.value})} placeholder="모 번호" />
                                     </div>
-                                    <div className="space-y-1">
-                                        <label className="px-1 text-slate-400 font-black">메모</label>
-                                        <textarea className="w-full p-4 bg-slate-50 rounded-2xl outline-none min-h-[80px]" value={editingStudent?.memo || ''} onChange={e => setEditingStudent({...editingStudent, memo: e.target.value})} placeholder="특이사항 메모" />
-                                    </div>
+                                    <textarea className="w-full p-4 bg-slate-50 rounded-2xl outline-none min-h-[80px] font-medium" value={editingStudent?.memo || ''} onChange={e => setEditingStudent({...editingStudent, memo: e.target.value})} placeholder="특이사항 메모" />
                                     <div className="flex flex-col gap-2 pt-4">
                                         <button onClick={() => { 
                                             const final = { ...editingStudent, group: editingStudent?.group || (activeGroupId === '전체' ? groups[0] : activeGroupId), activeTargets: editingStudent?.activeTargets || { self: true, father: false, mother: false } };
@@ -350,6 +290,7 @@
                         </div>
                     )}
 
+                    {/* 학급 관리 모달 */}
                     {showGroupModal && (
                         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex items-center justify-center p-6">
                             <div className="bg-white w-full rounded-[44px] p-8 animate-in max-h-[85vh] flex flex-col shadow-2xl">
@@ -363,12 +304,12 @@
                                                 if(n && n !== g) { setGroups(groups.map(x => x === g ? n : x)); setStudents(students.map(s => s.group === g ? {...s, group: n} : s)); }
                                             }} className="w-9 h-9 bg-white text-blue-600 rounded-xl shadow-sm flex items-center justify-center text-xs"><i className="fa-solid fa-pen"></i></button>
                                             <button onClick={() => {
-                                                if(groups.length <= 1) return alert("최소 하나의 학급은 있어야 합니다.");
-                                                if(confirm(`'${g}' 반을 삭제할까요?`)) { setGroups(groups.filter(x => x !== g)); setStudents(students.filter(s => s.group !== g)); setActiveGroupId('전체'); }
+                                                if(groups.length <= 1) return alert("최소 한 반은 있어야 합니다.");
+                                                if(confirm(`'${g}' 반을 삭제하시겠습니까?`)) { setGroups(groups.filter(x => x !== g)); setStudents(students.filter(s => s.group !== g)); setActiveGroupId('전체'); }
                                             }} className="w-9 h-9 bg-rose-50 text-rose-500 rounded-xl shadow-sm flex items-center justify-center text-xs"><i className="fa-solid fa-trash-can"></i></button>
                                         </div>
                                     ))}
-                                    <button onClick={() => { const n = prompt('새 학급 이름'); if(n) setGroups([...groups, n]); }} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 font-bold text-xs mt-4">+ 새로운 학급 추가</button>
+                                    <button onClick={() => { const n = prompt('추가할 반 이름'); if(n) setGroups([...groups, n]); }} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 font-bold text-xs mt-4">+ 새로운 학급 추가</button>
                                 </div>
                                 <button onClick={() => setShowGroupModal(false)} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black mt-6">닫기</button>
                             </div>
