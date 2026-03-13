@@ -35,7 +35,7 @@
         const { useState, useEffect, useMemo } = React;
 
         function App() {
-            // --- 데이터 상태 ---
+            // --- 데이터 로드 및 상태 관리 ---
             const [students, setStudents] = useState(() => JSON.parse(localStorage.getItem('my_attendance_students')) || []);
             const [templates, setTemplates] = useState(() => JSON.parse(localStorage.getItem('my_attendance_templates')) || [
                 { id: 'late', title: '지각', content: '[지각알림] {이름} 학생이 금일 {시간} 기준 미등교 상태입니다. 확인 부탁드립니다. - {교사}' },
@@ -44,17 +44,15 @@
             const [logs, setLogs] = useState(() => JSON.parse(localStorage.getItem('my_attendance_logs')) || []);
             const [teacherName, setTeacherName] = useState(localStorage.getItem('my_teacher_name') || '정유안 선생님');
             
-            // --- UI 상태 ---
             const [activeTab, setActiveTab] = useState('list');
             const [searchQuery, setSearchQuery] = useState('');
             const [selectedIds, setSelectedIds] = useState([]);
-            const [targetTypes, setTargetTypes] = useState({ father: true, mother: false, self: false });
+            const [targetTypes, setTargetTypes] = useState({ self: true, father: false, mother: false });
             const [currentTime, setCurrentTime] = useState(new Date());
-            
             const [showAddModal, setShowAddModal] = useState(false);
             const [editingStudent, setEditingStudent] = useState(null);
 
-            // --- 데이터 저장 ---
+            // 로컬 스토리지 자동 저장
             useEffect(() => {
                 localStorage.setItem('my_attendance_students', JSON.stringify(students));
                 localStorage.setItem('my_attendance_templates', JSON.stringify(templates));
@@ -69,76 +67,71 @@
 
             const filteredStudents = useMemo(() => students.filter(s => s.name.includes(searchQuery)), [students, searchQuery]);
 
-            // --- 양식 다운로드 (CSV) ---
+            // 양식 다운로드
             const downloadTemplate = () => {
-                const csvHeader = "이름,부번호,모번호,본인번호\n";
-                const csvSample = "홍길동,010-1111-2222,010-3333-4444,010-5555-6666";
-                // 한글 깨짐 방지를 위한 BOM(Byte Order Mark) 추가
+                const csvHeader = "이름,본인번호,부번호,모번호\n";
+                const csvSample = "홍길동,010-5555-6666,010-1111-2222,010-3333-4444";
                 const blob = new Blob(["\ufeff" + csvHeader + csvSample], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = url;
-                a.download = '출결관리_양식.csv';
-                a.click();
+                a.href = url; a.download = '출결관리_양식.csv'; a.click();
             };
 
-            // --- 간편 업로드 ---
+            // CSV 업로드
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     const text = evt.target.result;
                     const rows = text.split(/\r?\n/).filter(line => line.trim() !== '');
-                    
-                    // 첫 줄(헤더) 제외하고 데이터 파싱
                     const newStudents = rows.slice(1).map((row, idx) => {
                         const cols = row.split(',').map(c => c.trim());
-                        return {
-                            id: Date.now() + idx,
-                            name: cols[0] || '',
-                            father: cols[1] || '',
-                            mother: cols[2] || '',
-                            self: cols[3] || ''
-                        };
+                        return { id: Date.now() + idx, name: cols[0], self: cols[1], father: cols[2], mother: cols[3] };
                     }).filter(s => s.name);
-
                     setStudents([...students, ...newStudents]);
-                    alert(`${newStudents.length}명의 명단을 추가했습니다.`);
+                    alert(`${newStudents.length}명 추가 완료!`);
                 };
-                reader.readAsText(file, 'EUC-KR'); // 엑셀 호환을 위해 EUC-KR
+                reader.readAsText(file, 'EUC-KR');
             };
 
+            // 전화 걸기
+            const makeCall = (student) => {
+                let phone = "";
+                if (targetTypes.self && student.self) phone = student.self;
+                else if (targetTypes.father && student.father) phone = student.father;
+                else if (targetTypes.mother && student.mother) phone = student.mother;
+                else phone = student.self || student.father || student.mother;
+
+                if (!phone) return alert("연락처가 없습니다.");
+                window.location.href = `tel:${phone}`;
+            };
+
+            // 문자 보내기
             const sendSMS = (targets, template) => {
                 const timeStr = currentTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
                 const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
                 targets.forEach(s => {
                     const recipientNumbers = [];
+                    if (targetTypes.self && s.self) recipientNumbers.push(s.self);
                     if (targetTypes.father && s.father) recipientNumbers.push(s.father);
                     if (targetTypes.mother && s.mother) recipientNumbers.push(s.mother);
-                    if (targetTypes.self && s.self) recipientNumbers.push(s.self);
-
                     if (recipientNumbers.length === 0) return;
 
                     const msg = template.content.replace(/{이름}/g, s.name).replace(/{시간}/g, timeStr).replace(/{교사}/g, teacherName);
-                    const phones = recipientNumbers.join(',');
-                    const smsUrl = `sms:${phones}${isIos ? '&' : '?'}body=${encodeURIComponent(msg)}`;
-                    
+                    window.open(`sms:${recipientNumbers.join(',')}${isIos ? '&' : '?'}body=${encodeURIComponent(msg)}`, '_blank');
                     setLogs(prev => [{ id: Date.now()+Math.random(), time: new Date().toLocaleString(), target: s.name, content: msg }, ...prev].slice(0, 50));
-                    window.open(smsUrl, '_blank');
                 });
             };
 
             return (
                 <div className="max-w-md mx-auto bg-white min-h-screen flex flex-col shadow-2xl relative">
                     <header className="p-6 bg-blue-600 text-white sticky top-0 z-30 shadow-md">
-                        <div className="flex justify-between items-center mb-4 font-black">
-                            <h1 className="text-2xl tracking-tighter italic uppercase">Attendance</h1>
+                        <div className="flex justify-between items-center mb-4 font-black italic tracking-tighter uppercase">
+                            <h1 className="text-2xl">Attendance</h1>
                             <span className="text-[10px] bg-white/20 px-2 py-1 rounded-full">{currentTime.toLocaleTimeString()}</span>
                         </div>
-                        <input value={teacherName} onChange={e => setTeacherName(e.target.value)} className="bg-white/10 p-3 rounded-2xl w-full border-none outline-none font-bold placeholder:text-blue-200" placeholder="선생님 성함" />
+                        <input value={teacherName} onChange={e => setTeacherName(e.target.value)} className="bg-white/10 p-3 rounded-2xl w-full border-none outline-none font-bold placeholder:text-blue-100" placeholder="선생님 성함" />
                     </header>
 
                     <nav className="flex border-b bg-white sticky top-[136px] z-30">
@@ -154,38 +147,34 @@
                             <div className="animate-in space-y-4">
                                 <div className="space-y-3">
                                     <input placeholder="학생 이름 검색" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full px-4 py-3 rounded-2xl shadow-sm outline-none border-none font-medium text-sm" />
-                                    
                                     <div className="flex gap-2">
-                                        <button onClick={downloadTemplate} className="flex-1 bg-white border border-slate-200 py-3 rounded-2xl text-[11px] font-black text-blue-600 shadow-sm active:bg-blue-50 transition-colors">
-                                            <i className="fa-solid fa-download mr-1"></i> 양식 다운로드
-                                        </button>
+                                        <button onClick={downloadTemplate} className="flex-1 bg-white border border-slate-200 py-3 rounded-2xl text-[11px] font-black text-blue-600 shadow-sm active:bg-blue-50 transition-colors"><i className="fa-solid fa-download mr-1"></i> 양식 받기</button>
                                         <label className="flex-1 bg-blue-600 border border-blue-600 py-3 rounded-2xl text-[11px] font-black text-white text-center cursor-pointer shadow-lg active:scale-95 transition-all">
-                                            <i className="fa-solid fa-upload mr-1"></i> 명단 업로드
-                                            <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                                            <i className="fa-solid fa-upload mr-1"></i> 명단 올리기 <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
                                         </label>
                                     </div>
                                 </div>
 
                                 <div className="bg-white p-3 rounded-2xl shadow-sm border flex gap-2">
-                                    {[{k:'father',l:'부'},{k:'mother',l:'모'},{k:'self',l:'본인'}].map(i => (
+                                    {[{k:'self',l:'본인'},{k:'father',l:'부'},{k:'mother',l:'모'}].map(i => (
                                         <button key={i.k} onClick={() => setTargetTypes({...targetTypes, [i.k]: !targetTypes[i.k]})} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${targetTypes[i.k] ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-50 text-slate-300'}`}>{i.l}</button>
                                     ))}
                                 </div>
 
                                 <div className="space-y-3">
-                                    {filteredStudents.length === 0 && <div className="py-20 text-center text-slate-300 italic text-sm">학생을 추가해 주세요.</div>}
                                     {filteredStudents.map(s => (
-                                        <div key={s.id} className={`bg-white p-4 rounded-3xl shadow-sm flex items-center gap-4 border-2 transition-all ${selectedIds.includes(s.id) ? 'border-blue-500 ring-4 ring-blue-50' : 'border-transparent'}`}>
+                                        <div key={s.id} className={`bg-white p-4 rounded-3xl shadow-sm flex items-center gap-3 border-2 transition-all ${selectedIds.includes(s.id) ? 'border-blue-500 ring-4 ring-blue-50' : 'border-transparent'}`}>
                                             <div onClick={() => setSelectedIds(p => p.includes(s.id)?p.filter(id=>id!==s.id):[...p,s.id])} className={`w-7 h-7 rounded-xl border-2 flex items-center justify-center flex-shrink-0 ${selectedIds.includes(s.id)?'bg-blue-600 border-blue-600 text-white':'border-slate-100 bg-slate-50'}`}>
                                                 {selectedIds.includes(s.id) && <i className="fa-solid fa-check text-xs"></i>}
                                             </div>
                                             <div className="flex-1 truncate" onClick={() => { setEditingStudent(s); setShowAddModal(true); }}>
-                                                <div className="font-bold text-slate-800">{s.name} <i className="fa-solid fa-pen text-[10px] text-slate-300 ml-1"></i></div>
-                                                <div className="text-[9px] text-slate-400 font-medium truncate">부:{s.father||'-'} / 모:{s.mother||'-'} / 본인:{s.self||'-'}</div>
+                                                <div className="font-bold text-slate-800">{s.name} <i className="fa-solid fa-pen text-[9px] text-slate-200 ml-1"></i></div>
+                                                <div className="text-[9px] text-slate-400 font-medium truncate">본인:{s.self||'-'} / 부:{s.father||'-'} / 모:{s.mother||'-'}</div>
                                             </div>
-                                            <div className="flex gap-1">
-                                                <button onClick={() => sendSMS([s], templates[0])} className="w-8 h-8 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center text-xs"><i className="fa-solid fa-clock"></i></button>
-                                                <button onClick={() => sendSMS([s], templates[1])} className="w-8 h-8 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-xs"><i className="fa-solid fa-triangle-exclamation"></i></button>
+                                            <div className="flex gap-1.5">
+                                                <button onClick={() => makeCall(s)} className="w-9 h-9 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center text-xs hover:scale-110 active:scale-95 transition-transform"><i className="fa-solid fa-phone"></i></button>
+                                                <button onClick={() => sendSMS([s], templates[0])} className="w-9 h-9 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center text-xs hover:scale-110 active:scale-95 transition-transform"><i className="fa-solid fa-clock"></i></button>
+                                                <button onClick={() => sendSMS([s], templates[1])} className="w-9 h-9 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center text-xs hover:scale-110 active:scale-95 transition-transform"><i className="fa-solid fa-triangle-exclamation"></i></button>
                                             </div>
                                         </div>
                                     ))}
@@ -211,10 +200,10 @@
                                 {logs.map(log => (
                                     <div key={log.id} className="bg-white p-4 rounded-2xl shadow-sm text-xs border border-slate-100">
                                         <div className="flex justify-between font-black text-blue-600 mb-1"><span>{log.target}</span><span>{log.time}</span></div>
-                                        <p className="text-slate-400 line-clamp-2">{log.content}</p>
+                                        <p className="text-slate-400 line-clamp-2 leading-relaxed">{log.content}</p>
                                     </div>
                                 ))}
-                                {logs.length === 0 && <div className="text-center py-20 text-slate-300 text-sm">기록이 없습니다.</div>}
+                                {logs.length === 0 && <div className="text-center py-20 text-slate-300 text-sm italic font-medium">기록이 없습니다.</div>}
                             </div>
                         )}
                     </main>
@@ -233,42 +222,24 @@
                         </div>
                     )}
 
-                    {/* 수동 추가 버튼 */}
                     {activeTab === 'list' && selectedIds.length === 0 && (
-                        <button onClick={() => { setEditingStudent(null); setShowAddModal(true); }} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center text-xl transition-transform active:scale-90 z-40 hover:scale-110"><i className="fa-solid fa-plus"></i></button>
+                        <button onClick={() => { setEditingStudent(null); setShowAddModal(true); }} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center text-xl z-40 hover:scale-110 active:scale-90 transition-all"><i className="fa-solid fa-plus"></i></button>
                     )}
 
-                    {/* 직접 추가/수정 모달 */}
                     {showAddModal && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-6">
                             <div className="bg-white w-full rounded-[44px] p-8 animate-in shadow-2xl">
                                 <h3 className="text-xl font-black mb-6 text-blue-600">{editingStudent ? '정보 수정' : '직접 추가'}</h3>
                                 <div className="space-y-4">
                                     <input placeholder="이름" className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 focus:ring-blue-500" value={editingStudent?.name || ''} onChange={e => setEditingStudent({...editingStudent, name: e.target.value})} />
+                                    <input placeholder="본인 번호" className="w-full p-4 bg-slate-50 rounded-2xl text-sm outline-none" value={editingStudent?.self || ''} onChange={e => setEditingStudent({...editingStudent, self: e.target.value})} />
                                     <div className="grid grid-cols-2 gap-2">
                                         <input placeholder="부 번호" className="w-full p-4 bg-slate-50 rounded-2xl text-xs outline-none" value={editingStudent?.father || ''} onChange={e => setEditingStudent({...editingStudent, father: e.target.value})} />
                                         <input placeholder="모 번호" className="w-full p-4 bg-slate-50 rounded-2xl text-xs outline-none" value={editingStudent?.mother || ''} onChange={e => setEditingStudent({...editingStudent, mother: e.target.value})} />
                                     </div>
-                                    <input placeholder="본인 번호" className="w-full p-4 bg-slate-50 rounded-2xl text-xs outline-none" value={editingStudent?.self || ''} onChange={e => setEditingStudent({...editingStudent, self: e.target.value})} />
                                     <div className="flex gap-4 pt-4">
-                                        <button onClick={() => { 
-                                            if(editingStudent?.id) {
-                                                setStudents(students.filter(s => s.id !== editingStudent.id));
-                                                setShowAddModal(false);
-                                            } else {
-                                                setShowAddModal(false);
-                                            }
-                                        }} className="flex-1 font-bold text-rose-500">{editingStudent?.id ? '삭제' : '취소'}</button>
-                                        <button onClick={() => {
-                                            if(editingStudent?.name) {
-                                                if(editingStudent.id) {
-                                                    setStudents(students.map(st => st.id === editingStudent.id ? editingStudent : st));
-                                                } else {
-                                                    setStudents([...students, {...editingStudent, id: Date.now()}]);
-                                                }
-                                                setShowAddModal(false);
-                                            }
-                                        }} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold">저장</button>
+                                        <button onClick={() => { if(editingStudent?.id) { if(confirm('정말 삭제할까요?')) setStudents(students.filter(s => s.id !== editingStudent.id)); setShowAddModal(false); } else { setShowAddModal(false); } }} className="flex-1 font-bold text-rose-500">{editingStudent?.id ? '삭제' : '취소'}</button>
+                                        <button onClick={() => { if(editingStudent?.name) { if(editingStudent.id) { setStudents(students.map(st => st.id === editingStudent.id ? editingStudent : st)); } else { setStudents([...students, {...editingStudent, id: Date.now()}]); } setShowAddModal(false); } }} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold">저장</button>
                                     </div>
                                 </div>
                             </div>
