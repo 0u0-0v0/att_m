@@ -35,6 +35,7 @@
         const { useState, useEffect, useMemo } = React;
 
         function App() {
+            // --- 데이터 상태 ---
             const [students, setStudents] = useState(() => JSON.parse(localStorage.getItem('my_attendance_students')) || []);
             const [templates, setTemplates] = useState(() => JSON.parse(localStorage.getItem('my_attendance_templates')) || [
                 { id: 'late', title: '지각', content: '[지각알림] {이름} 학생이 금일 {시간} 기준 미등교 상태입니다. 확인 부탁드립니다. - {교사}' },
@@ -43,6 +44,7 @@
             const [logs, setLogs] = useState(() => JSON.parse(localStorage.getItem('my_attendance_logs')) || []);
             const [teacherName, setTeacherName] = useState(localStorage.getItem('my_teacher_name') || '정유안 선생님');
             
+            // --- UI 상태 ---
             const [activeTab, setActiveTab] = useState('list');
             const [searchQuery, setSearchQuery] = useState('');
             const [selectedIds, setSelectedIds] = useState([]);
@@ -51,11 +53,8 @@
             
             const [showAddModal, setShowAddModal] = useState(false);
             const [editingStudent, setEditingStudent] = useState(null);
-            const [showImportModal, setShowImportModal] = useState(false);
-            const [importRawRows, setImportRawRows] = useState([]);
-            const [startRowIndex, setStartRowIndex] = useState(0);
-            const [mapping, setMapping] = useState({ name: -1, father: -1, mother: -1, self: -1 });
 
+            // --- 데이터 저장 ---
             useEffect(() => {
                 localStorage.setItem('my_attendance_students', JSON.stringify(students));
                 localStorage.setItem('my_attendance_templates', JSON.stringify(templates));
@@ -70,58 +69,66 @@
 
             const filteredStudents = useMemo(() => students.filter(s => s.name.includes(searchQuery)), [students, searchQuery]);
 
-            const handleFileSelect = (e) => {
+            // --- 양식 다운로드 (CSV) ---
+            const downloadTemplate = () => {
+                const csvHeader = "이름,부번호,모번호,본인번호\n";
+                const csvSample = "홍길동,010-1111-2222,010-3333-4444,010-5555-6666";
+                // 한글 깨짐 방지를 위한 BOM(Byte Order Mark) 추가
+                const blob = new Blob(["\ufeff" + csvHeader + csvSample], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = '출결관리_양식.csv';
+                a.click();
+            };
+
+            // --- 간편 업로드 ---
+            const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
+
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     const text = evt.target.result;
-                    const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-                    const rows = lines.map(line => line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(item => item.replace(/^"|"$/g, '').trim()));
-                    setImportRawRows(rows);
-                    setShowImportModal(true);
-                    setStartRowIndex(rows.findIndex(r => r.some(c => c.includes('1') || c.includes('성명'))) || 0);
-                };
-                reader.readAsText(file, 'EUC-KR');
-            };
+                    const rows = text.split(/\r?\n/).filter(line => line.trim() !== '');
+                    
+                    // 첫 줄(헤더) 제외하고 데이터 파싱
+                    const newStudents = rows.slice(1).map((row, idx) => {
+                        const cols = row.split(',').map(c => c.trim());
+                        return {
+                            id: Date.now() + idx,
+                            name: cols[0] || '',
+                            father: cols[1] || '',
+                            mother: cols[2] || '',
+                            self: cols[3] || ''
+                        };
+                    }).filter(s => s.name);
 
-            const confirmImport = () => {
-                if (mapping.name === -1) return alert("학생 이름 칸을 선택해 주세요.");
-                const dataRows = importRawRows.slice(startRowIndex);
-                const newOnes = dataRows.map((row, idx) => ({
-                    id: Date.now() + idx,
-                    name: row[mapping.name] || '',
-                    father: mapping.father !== -1 ? row[mapping.father] : '',
-                    mother: mapping.mother !== -1 ? row[mapping.mother] : '',
-                    self: mapping.self !== -1 ? row[mapping.self] : ''
-                })).filter(s => s.name && !s.name.includes('성명') && !s.name.includes('학생명'));
-                setStudents([...students, ...newOnes]);
-                setShowImportModal(false);
+                    setStudents([...students, ...newStudents]);
+                    alert(`${newStudents.length}명의 명단을 추가했습니다.`);
+                };
+                reader.readAsText(file, 'EUC-KR'); // 엑셀 호환을 위해 EUC-KR
             };
 
             const sendSMS = (targets, template) => {
                 const timeStr = currentTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
                 const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
                 targets.forEach(s => {
                     const recipientNumbers = [];
                     if (targetTypes.father && s.father) recipientNumbers.push(s.father);
                     if (targetTypes.mother && s.mother) recipientNumbers.push(s.mother);
                     if (targetTypes.self && s.self) recipientNumbers.push(s.self);
-                    if (recipientNumbers.length === 0) return;
-                    const msg = template.content.replace(/{이름}/g, s.name).replace(/{시간}/g, timeStr).replace(/{교사}/g, teacherName);
-                    window.open(`sms:${recipientNumbers.join(',')}${isIos ? '&' : '?'}body=${encodeURIComponent(msg)}`, '_blank');
-                    setLogs(prev => [{ id: Date.now()+Math.random(), time: new Date().toLocaleString(), target: s.name, content: msg }, ...prev].slice(0, 50));
-                });
-            };
 
-            const handleSaveStudent = (s) => {
-                if (editingStudent) {
-                    setStudents(students.map(st => st.id === s.id ? s : st));
-                } else {
-                    setStudents([...students, { ...s, id: Date.now() }]);
-                }
-                setShowAddModal(false);
-                setEditingStudent(null);
+                    if (recipientNumbers.length === 0) return;
+
+                    const msg = template.content.replace(/{이름}/g, s.name).replace(/{시간}/g, timeStr).replace(/{교사}/g, teacherName);
+                    const phones = recipientNumbers.join(',');
+                    const smsUrl = `sms:${phones}${isIos ? '&' : '?'}body=${encodeURIComponent(msg)}`;
+                    
+                    setLogs(prev => [{ id: Date.now()+Math.random(), time: new Date().toLocaleString(), target: s.name, content: msg }, ...prev].slice(0, 50));
+                    window.open(smsUrl, '_blank');
+                });
             };
 
             return (
@@ -145,52 +152,60 @@
                     <main className="flex-1 p-4 bg-slate-50 overflow-y-auto no-scrollbar pb-32">
                         {activeTab === 'list' && (
                             <div className="animate-in space-y-4">
-                                <div className="space-y-2">
+                                <div className="space-y-3">
                                     <input placeholder="학생 이름 검색" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full px-4 py-3 rounded-2xl shadow-sm outline-none border-none font-medium text-sm" />
-                                    <label className="block w-full bg-emerald-600 text-white p-4 rounded-3xl text-center cursor-pointer shadow-lg active:scale-95 transition-all font-bold">
-                                        <i className="fa-solid fa-file-csv mr-2"></i> 비상연락망(.csv) 업로드
-                                        <input type="file" accept=".csv" onChange={handleFileSelect} className="hidden" />
-                                    </label>
+                                    
+                                    <div className="flex gap-2">
+                                        <button onClick={downloadTemplate} className="flex-1 bg-white border border-slate-200 py-3 rounded-2xl text-[11px] font-black text-blue-600 shadow-sm active:bg-blue-50 transition-colors">
+                                            <i className="fa-solid fa-download mr-1"></i> 양식 다운로드
+                                        </button>
+                                        <label className="flex-1 bg-blue-600 border border-blue-600 py-3 rounded-2xl text-[11px] font-black text-white text-center cursor-pointer shadow-lg active:scale-95 transition-all">
+                                            <i className="fa-solid fa-upload mr-1"></i> 명단 업로드
+                                            <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                                        </label>
+                                    </div>
                                 </div>
+
                                 <div className="bg-white p-3 rounded-2xl shadow-sm border flex gap-2">
                                     {[{k:'father',l:'부'},{k:'mother',l:'모'},{k:'self',l:'본인'}].map(i => (
                                         <button key={i.k} onClick={() => setTargetTypes({...targetTypes, [i.k]: !targetTypes[i.k]})} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${targetTypes[i.k] ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-50 text-slate-300'}`}>{i.l}</button>
                                     ))}
                                 </div>
+
                                 <div className="space-y-3">
+                                    {filteredStudents.length === 0 && <div className="py-20 text-center text-slate-300 italic text-sm">학생을 추가해 주세요.</div>}
                                     {filteredStudents.map(s => (
-                                        <div key={s.id} className={`bg-white p-4 rounded-3xl shadow-sm flex items-center gap-4 border-2 transition-all ${selectedIds.includes(s.id) ? 'border-blue-500' : 'border-transparent'}`}>
+                                        <div key={s.id} className={`bg-white p-4 rounded-3xl shadow-sm flex items-center gap-4 border-2 transition-all ${selectedIds.includes(s.id) ? 'border-blue-500 ring-4 ring-blue-50' : 'border-transparent'}`}>
                                             <div onClick={() => setSelectedIds(p => p.includes(s.id)?p.filter(id=>id!==s.id):[...p,s.id])} className={`w-7 h-7 rounded-xl border-2 flex items-center justify-center flex-shrink-0 ${selectedIds.includes(s.id)?'bg-blue-600 border-blue-600 text-white':'border-slate-100 bg-slate-50'}`}>
                                                 {selectedIds.includes(s.id) && <i className="fa-solid fa-check text-xs"></i>}
                                             </div>
                                             <div className="flex-1 truncate" onClick={() => { setEditingStudent(s); setShowAddModal(true); }}>
-                                                <div className="font-bold text-slate-800 flex items-center gap-2">
-                                                    {s.name} <i className="fa-solid fa-pen text-[10px] text-slate-300"></i>
-                                                </div>
+                                                <div className="font-bold text-slate-800">{s.name} <i className="fa-solid fa-pen text-[10px] text-slate-300 ml-1"></i></div>
                                                 <div className="text-[9px] text-slate-400 font-medium truncate">부:{s.father||'-'} / 모:{s.mother||'-'} / 본인:{s.self||'-'}</div>
                                             </div>
                                             <div className="flex gap-1">
-                                                <button onClick={() => sendSMS([s], templates[0])} className="w-8 h-8 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center text-xs hover:scale-110"><i className="fa-solid fa-clock"></i></button>
-                                                <button onClick={() => sendSMS([s], templates[1])} className="w-8 h-8 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-xs hover:scale-110"><i className="fa-solid fa-triangle-exclamation"></i></button>
+                                                <button onClick={() => sendSMS([s], templates[0])} className="w-8 h-8 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center text-xs"><i className="fa-solid fa-clock"></i></button>
+                                                <button onClick={() => sendSMS([s], templates[1])} className="w-8 h-8 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-xs"><i className="fa-solid fa-triangle-exclamation"></i></button>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
-                        {/* Templates and History tabs same as before... */}
+
                         {activeTab === 'templates' && (
                             <div className="animate-in space-y-4">
                                 {templates.map(tp => (
                                     <div key={tp.id} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
                                         <input value={tp.title} onChange={e => setTemplates(templates.map(t=>t.id===tp.id?{...t,title:e.target.value}:t))} className="w-full font-black text-blue-600 border-b pb-1 mb-2 outline-none border-slate-50" />
                                         <textarea value={tp.content} onChange={e => setTemplates(templates.map(t=>t.id===tp.id?{...t,content:e.target.value}:t))} className="w-full text-xs text-slate-400 bg-slate-50 p-3 rounded-xl min-h-[80px] outline-none" />
-                                        <button onClick={() => setTemplates(templates.filter(t=>t.id!==tp.id))} className="mt-2 text-rose-500 text-xs font-bold"><i className="fa-solid fa-trash-can mr-1"></i> 문구 삭제</button>
+                                        <button onClick={() => setTemplates(templates.filter(t=>t.id!==tp.id))} className="mt-2 text-rose-500 text-xs font-bold"><i className="fa-solid fa-trash-can mr-1"></i> 삭제</button>
                                     </div>
                                 ))}
                                 <button onClick={() => setTemplates([...templates,{id:Date.now(),title:'제목',content:''}])} className="w-full py-4 border-2 border-dashed rounded-3xl text-slate-300 font-bold hover:bg-white transition-colors">+ 문구 추가</button>
                             </div>
                         )}
+
                         {activeTab === 'history' && (
                             <div className="animate-in space-y-3">
                                 {logs.map(log => (
@@ -199,80 +214,66 @@
                                         <p className="text-slate-400 line-clamp-2">{log.content}</p>
                                     </div>
                                 ))}
+                                {logs.length === 0 && <div className="text-center py-20 text-slate-300 text-sm">기록이 없습니다.</div>}
                             </div>
                         )}
                     </main>
 
-                    {/* Floating Add Button */}
+                    {selectedIds.length > 0 && activeTab === 'list' && (
+                        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm bg-slate-900/95 backdrop-blur-md p-5 rounded-[32px] shadow-2xl z-50 animate-in">
+                            <div className="flex justify-between mb-4 px-2">
+                                <span className="text-white font-black text-sm">{selectedIds.length}명 선택됨</span>
+                                <button onClick={() => setSelectedIds([])} className="text-xs text-slate-400 underline italic">취소</button>
+                            </div>
+                            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                                {templates.map(tp => (
+                                    <button key={tp.id} onClick={() => sendSMS(students.filter(s=>selectedIds.includes(s.id)), tp)} className="flex-shrink-0 bg-blue-600 text-white px-5 py-3 rounded-2xl font-black text-xs hover:bg-blue-500 shadow-lg">단체 {tp.title}</button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 수동 추가 버튼 */}
                     {activeTab === 'list' && selectedIds.length === 0 && (
-                        <button onClick={() => { setEditingStudent(null); setShowAddModal(true); }} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center text-xl z-40 hover:scale-110 active:scale-90 transition-all">
-                            <i className="fa-solid fa-plus"></i>
-                        </button>
+                        <button onClick={() => { setEditingStudent(null); setShowAddModal(true); }} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center text-xl transition-transform active:scale-90 z-40 hover:scale-110"><i className="fa-solid fa-plus"></i></button>
                     )}
 
-                    {/* Manual Add/Edit Modal */}
+                    {/* 직접 추가/수정 모달 */}
                     {showAddModal && (
-                        <Modal 
-                            student={editingStudent} 
-                            onSave={handleSaveStudent} 
-                            onClose={() => setShowAddModal(false)} 
-                            onDelete={(id) => { setStudents(students.filter(s => s.id !== id)); setShowAddModal(false); }}
-                        />
-                    )}
-
-                    {/* Import Modal code... */}
-                    {showImportModal && (
-                        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-xs">
-                            <div className="bg-white w-full rounded-[40px] p-8 animate-in max-h-[85vh] flex flex-col">
-                                <h3 className="text-xl font-black mb-1 text-blue-600">데이터 매칭</h3>
-                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 py-4">
-                                    <div className="bg-slate-50 rounded-2xl border p-2 h-32 overflow-auto">
-                                        <table className="w-full">
-                                            <tbody>
-                                                {importRawRows.slice(0, 10).map((row, idx) => (
-                                                    <tr key={idx} onClick={() => setStartRowIndex(idx)} className={`border-b ${startRowIndex === idx ? 'bg-blue-100' : ''}`}>
-                                                        <td className="p-1 font-bold">{idx+1}</td><td className="p-1 truncate">{row.join('|')}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-6">
+                            <div className="bg-white w-full rounded-[44px] p-8 animate-in shadow-2xl">
+                                <h3 className="text-xl font-black mb-6 text-blue-600">{editingStudent ? '정보 수정' : '직접 추가'}</h3>
+                                <div className="space-y-4">
+                                    <input placeholder="이름" className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none outline-none focus:ring-2 focus:ring-blue-500" value={editingStudent?.name || ''} onChange={e => setEditingStudent({...editingStudent, name: e.target.value})} />
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <input placeholder="부 번호" className="w-full p-4 bg-slate-50 rounded-2xl text-xs outline-none" value={editingStudent?.father || ''} onChange={e => setEditingStudent({...editingStudent, father: e.target.value})} />
+                                        <input placeholder="모 번호" className="w-full p-4 bg-slate-50 rounded-2xl text-xs outline-none" value={editingStudent?.mother || ''} onChange={e => setEditingStudent({...editingStudent, mother: e.target.value})} />
                                     </div>
-                                    {[{k:'name',l:'이름'},{k:'father',l:'부'},{k:'mother',l:'모'},{k:'self',l:'학생'}].map(f => (
-                                        <div key={f.k} className="flex items-center justify-between bg-slate-50 p-2 rounded-xl">
-                                            <span>{f.l}</span>
-                                            <select className="border rounded p-1" value={mapping[f.k]} onChange={e => setMapping({...mapping, [f.k]: parseInt(e.target.value)})}>
-                                                <option value="-1">미지정</option>
-                                                {importRawRows[startRowIndex]?.map((h, i) => (<option key={i} value={i}>{i+1}번 칸</option>))}
-                                            </select>
-                                        </div>
-                                    ))}
+                                    <input placeholder="본인 번호" className="w-full p-4 bg-slate-50 rounded-2xl text-xs outline-none" value={editingStudent?.self || ''} onChange={e => setEditingStudent({...editingStudent, self: e.target.value})} />
+                                    <div className="flex gap-4 pt-4">
+                                        <button onClick={() => { 
+                                            if(editingStudent?.id) {
+                                                setStudents(students.filter(s => s.id !== editingStudent.id));
+                                                setShowAddModal(false);
+                                            } else {
+                                                setShowAddModal(false);
+                                            }
+                                        }} className="flex-1 font-bold text-rose-500">{editingStudent?.id ? '삭제' : '취소'}</button>
+                                        <button onClick={() => {
+                                            if(editingStudent?.name) {
+                                                if(editingStudent.id) {
+                                                    setStudents(students.map(st => st.id === editingStudent.id ? editingStudent : st));
+                                                } else {
+                                                    setStudents([...students, {...editingStudent, id: Date.now()}]);
+                                                }
+                                                setShowAddModal(false);
+                                            }
+                                        }} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold">저장</button>
+                                    </div>
                                 </div>
-                                <button onClick={confirmImport} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black mt-4">불러오기 완료</button>
                             </div>
                         </div>
                     )}
-                </div>
-            );
-        }
-
-        function Modal({ student, onSave, onClose, onDelete }) {
-            const [data, setData] = useState(student || { name: '', father: '', mother: '', self: '' });
-            return (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-6">
-                    <div className="bg-white w-full rounded-[44px] p-8 shadow-2xl animate-in">
-                        <h3 className="text-xl font-black mb-6 text-blue-600">{student ? '학생 정보 수정' : '학생 직접 추가'}</h3>
-                        <div className="space-y-4">
-                            <input placeholder="이름" className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none" value={data.name} onChange={e => setData({...data, name: e.target.value})} />
-                            <input placeholder="부 번호" className="w-full p-4 bg-slate-50 rounded-2xl text-sm outline-none" value={data.father} onChange={e => setData({...data, father: e.target.value})} />
-                            <input placeholder="모 번호" className="w-full p-4 bg-slate-50 rounded-2xl text-sm outline-none" value={data.mother} onChange={e => setData({...data, mother: e.target.value})} />
-                            <input placeholder="본인 번호" className="w-full p-4 bg-slate-50 rounded-2xl text-sm outline-none" value={data.self} onChange={e => setData({...data, self: e.target.value})} />
-                            <div className="flex gap-2 pt-4">
-                                {student && <button onClick={() => onDelete(student.id)} className="flex-1 bg-rose-50 text-rose-500 font-bold py-4 rounded-2xl">삭제</button>}
-                                <button onClick={onClose} className="flex-1 font-bold text-slate-400">취소</button>
-                                <button onClick={() => onSave(data)} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold">저장</button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             );
         }
