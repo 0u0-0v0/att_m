@@ -10,7 +10,7 @@
     <link rel="apple-touch-icon" href="icon-192.png">
     
     <style>
-        /* ✅ 민산스(MinSans) 모든 굵기 설정 */
+        /* 민산스 폰트 9종 설정 */
         @font-face { font-family: 'MinSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/MinSans-Thin.woff') format('woff'); font-weight: 100; font-display: swap; }
         @font-face { font-family: 'MinSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2508-1@1.0/MinSans-ExtraLight.woff2') format('woff2'); font-weight: 200; font-display: swap; }
         @font-face { font-family: 'MinSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/MinSans-Light.woff') format('woff'); font-weight: 300; font-display: swap; }
@@ -21,7 +21,6 @@
         @font-face { font-family: 'MinSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2508-1@1.0/MinSans-ExtraBold.woff2') format('woff2'); font-weight: 800; font-display: swap; }
         @font-face { font-family: 'MinSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/MinSans-Black.woff') format('woff'); font-weight: 900; font-display: swap; }
 
-        /* ✅ 당겨서 새로고침 방지 및 기본 레이아웃 */
         html, body { overscroll-behavior-y: contain; height: 100%; width: 100%; overflow: hidden; font-family: 'MinSans', sans-serif; background-color: #f8fafc; }
         #root { height: 100%; width: 100%; overflow-y: auto; background-color: #f8fafc; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -71,7 +70,6 @@
             const [showInstallBtn, setShowInstallBtn] = useState(false);
             const [deferredPrompt, setDeferredPrompt] = useState(null);
 
-            // ✅ 렌더링 완료 시 로딩 화면 제거
             useEffect(() => {
                 const loader = document.getElementById('loading-screen');
                 if (loader) loader.style.display = 'none';
@@ -99,6 +97,7 @@
                 .sort((a, b) => a.name.localeCompare(b.name));
             }, [students, activeGroupId, searchQuery]);
 
+            // ✅ 단체 발송 로직 수정: 2명 이상이면 {이름}을 '자녀'로 치환
             const sendSMS = (targets, tp) => {
                 if (targets.length === 0) return;
                 const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -109,8 +108,18 @@
                     if (t.father && s.father) nums.push(s.father.replace(/[^0-9*]/g, ''));
                     if (t.mother && s.mother) nums.push(s.mother.replace(/[^0-9*]/g, ''));
                 });
+                if (nums.length === 0) return alert("발송할 번호가 없습니다.");
+                
                 const timeStr = currentTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-                const msg = tp.content.replace(/{이름}/g, targets.length > 1 ? `${targets[0].name} 외 ${targets.length-1}명` : targets[0].name).replace(/{시간}/g, timeStr).replace(/{교사}/g, teacherName);
+                
+                // 핵심 로직: 여러 명이면 '자녀', 한 명이면 '이름'
+                const displayName = targets.length > 1 ? "자녀" : targets[0].name;
+                
+                const msg = tp.content
+                    .replace(/{이름}/g, displayName)
+                    .replace(/{시간}/g, timeStr)
+                    .replace(/{교사}/g, teacherName);
+
                 window.location.href = `sms:${nums.join(isIos ? ',' : ';')}${isIos ? '&' : '?'}body=${encodeURIComponent(msg)}`;
             };
 
@@ -141,7 +150,7 @@
                             <div className="animate-in space-y-4">
                                 <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 items-center">
                                     <button onClick={() => setShowGroupModal(true)} className="flex-shrink-0 w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center shadow-lg"><i className="fa-solid fa-cog"></i></button>
-                                    <button onClick={() => { if(selectedIds.length === filteredStudents.length) setSelectedIds([]); else setSelectedIds(filteredStudents.map(s => s.id)); }} className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center shadow-md ${selectedIds.length > 0 && selectedIds.length === filteredStudents.length ? 'bg-blue-600 text-white' : 'bg-white text-slate-400 border'}`}><i className="fa-solid fa-check-double text-xs"></i></button>
+                                    <button onClick={() => { if(selectedIds.length === filteredStudents.length) setSelectedIds([]); else setSelectedIds(filteredStudents.map(s => s.id)); }} className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center shadow-md transition-colors ${selectedIds.length > 0 && selectedIds.length === filteredStudents.length ? 'bg-blue-600 text-white' : 'bg-white text-slate-400 border'}`}><i className="fa-solid fa-check-double text-xs"></i></button>
                                     {['전체', ...groups].map(g => (
                                         <button key={g} onClick={() => { setActiveGroupId(g); setSelectedIds([]); }} className={`flex-shrink-0 px-5 py-2.5 rounded-xl text-[11px] font-black transition-all ${activeGroupId === g ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-400 border'}`}>{g}</button>
                                     ))}
@@ -187,6 +196,7 @@
                         )}
                     </main>
 
+                    {/* ✅ 단체 발송 바 (중앙 하단 고정) */}
                     {selectedIds.length > 0 && activeTab === 'list' && (
                         <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-slate-900/95 backdrop-blur-xl p-6 pb-10 rounded-t-[40px] shadow-2xl z-[60] slide-up border-t border-white/10">
                             <div className="flex justify-between items-center mb-6 text-white px-2">
@@ -198,7 +208,7 @@
                             </div>
                             <div className="flex flex-wrap gap-2.5 justify-center overflow-y-auto max-h-40 no-scrollbar">
                                 {templates.map(tp => (
-                                    <button key={tp.id} onClick={() => sendSMS(students.filter(s=>selectedIds.includes(s.id)), tp)} className="bg-blue-600 text-white px-6 py-3.5 rounded-2xl font-bold text-xs shadow-lg active:scale-95 transition-all">{tp.title} 발송</button>
+                                    <button key={tp.id} onClick={() => sendSMS(students.filter(s=>selectedIds.includes(s.id)), tp)} className="bg-blue-600 text-white px-6 py-3.5 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all">{tp.title} 발송</button>
                                 ))}
                             </div>
                         </div>
@@ -241,7 +251,9 @@
         root.render(<App />);
 
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js').catch(() => {});
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
+            });
         }
     </script>
 </body>
