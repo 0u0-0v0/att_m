@@ -312,4 +312,60 @@
                                         <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none" value={editingStudent?.father || ''} onChange={e => setEditingStudent({...editingStudent, father: e.target.value})} placeholder="부 번호" />
                                         <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none" value={editingStudent?.mother || ''} onChange={e => setEditingStudent({...editingStudent, mother: e.target.value})} placeholder="모 번호" />
                                     </div>
-                                    <textarea className="w-full p-4 bg-slate-50 rounded-2xl outline-none min-h-[80px]" value={editingStudent?.memo || ''} onChange={e => setEditingStudent({...editingStudent, memo:
+                                    <textarea className="w-full p-4 bg-slate-50 rounded-2xl outline-none min-h-[80px]" value={editingStudent?.memo || ''} onChange={e => setEditingStudent({...editingStudent, memo: e.target.value})} placeholder="특이사항 메모" />
+                                    <div className="flex flex-col gap-2 pt-4">
+                                        <button onClick={() => { 
+                                            const final = { ...editingStudent, group: editingStudent?.group || (activeGroupId === '전체' ? groups[0] : activeGroupId), activeTargets: editingStudent?.activeTargets || { self: true, father: false, mother: false } };
+                                            if(final.name) { 
+                                                if(final.id) setStudents(students.map(st => st.id === final.id ? final : st));
+                                                else setStudents([...students, {...final, id: Date.now()}]);
+                                                setShowAddModal(false); 
+                                            } 
+                                        }} className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black shadow-lg">저장하기</button>
+                                        <div className="flex gap-2">
+                                            {editingStudent && <button onClick={() => deleteStudent(editingStudent.id)} className="flex-1 bg-rose-50 text-rose-500 font-bold py-4 rounded-3xl border border-rose-100">학생 삭제</button>}
+                                            <button onClick={() => setShowAddModal(false)} className="flex-1 font-bold text-slate-400 py-4">취소</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showGroupModal && (
+                        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+                            <div className="bg-white w-full rounded-[44px] p-8 animate-in max-h-[85vh] flex flex-col shadow-2xl">
+                                <h3 className="text-xl font-black mb-1 text-blue-600 text-center">학급 관리</h3>
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 mt-6">
+                                    {groups.map(g => (
+                                        <div key={g} className="flex items-center gap-3 bg-slate-50 p-4 rounded-3xl border border-slate-100">
+                                            <span className="flex-1 font-black text-slate-700 text-sm">{g}</span>
+                                            <button onClick={() => {
+                                                const n = prompt("새 이름", g);
+                                                if(n && n !== g) { setGroups(groups.map(x => x === g ? n : x)); setStudents(students.map(s => s.group === g ? {...s, group: n} : s)); }
+                                            }} className="w-9 h-9 bg-white text-blue-600 rounded-xl shadow-sm flex items-center justify-center text-xs"><i className="fa-solid fa-pen"></i></button>
+                                            <button onClick={() => {
+                                                if(groups.length <= 1) return alert("최소 하나의 반은 있어야 합니다.");
+                                                if(confirm(`'${g}' 반을 삭제할까요?`)) { setGroups(groups.filter(x => x !== g)); setStudents(students.filter(s => s.group !== g)); setActiveGroupId('전체'); }
+                                            }} className="w-9 h-9 bg-rose-50 text-rose-500 rounded-xl shadow-sm flex items-center justify-center text-xs"><i className="fa-solid fa-trash-can"></i></button>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => { const n = prompt('추가할 반 이름'); if(n) setGroups([...groups, n]); }} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 font-bold text-xs mt-4">+ 새로운 학급 추가</button>
+                                </div>
+                                <button onClick={() => setShowGroupModal(false)} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black mt-6">닫기</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>
