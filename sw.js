@@ -1,5 +1,6 @@
-const CACHE_NAME = 'attendance-pro-v5'; // 버전 업
+const CACHE_NAME = 'attendance-pro-v6';
 
+// ✅ 캐시할 파일 목록 (라이브러리 및 모든 민산스 폰트 포함)
 const ASSETS = [
   './',
   './index.html',
@@ -21,33 +22,29 @@ const ASSETS = [
   'https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/MinSans-Black.woff'
 ];
 
-// 설치 즉시 활성화 준비
+// 설치 시 캐싱
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
-  self.skipWaiting(); 
+  self.skipWaiting();
 });
 
-// ✅ 핵심 수정: 활성화되자마자 즉시 현재 열려있는 앱 페이지들을 제어함
+// 활성화 시 제어권 즉시 획득 및 옛 캐시 삭제
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     Promise.all([
-      self.clients.claim(), // 즉시 제어권 획득
-      caches.keys().then((keys) => {
-        return Promise.all(keys.map((key) => {
-          if (key !== CACHE_NAME) return caches.delete(key);
-        }));
-      })
+      self.clients.claim(),
+      caches.keys().then((keys) => Promise.all(
+        keys.map((key) => { if (key !== CACHE_NAME) return caches.delete(key); })
+      ))
     ])
   );
 });
 
+// ✅ 네트워크 요청 가로채기 (캐시 우선 전략으로 오프라인 속도 극대화)
 self.addEventListener('fetch', (e) => {
-  // 네트워크가 안 될 때만 캐시를 사용하는 게 아니라, 캐시된 게 있으면 무조건 캐시에서 먼저 꺼내옴 (속도 향상)
   e.respondWith(
-    caches.match(e.request).then((res) => {
-      return res || fetch(e.request);
-    })
+    caches.match(e.request).then((res) => res || fetch(e.request))
   );
 });
