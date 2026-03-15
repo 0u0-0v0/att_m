@@ -97,7 +97,7 @@
                 .sort((a, b) => a.name.localeCompare(b.name));
             }, [students, activeGroupId, searchQuery]);
 
-            // ✅ 단체 발송 로직 수정: 2명 이상이면 {이름}을 '자녀'로 치환
+            // ✅ 단체 발송 로직: 2명 이상이면 {이름}을 빈칸으로 처리
             const sendSMS = (targets, tp) => {
                 if (targets.length === 0) return;
                 const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -112,13 +112,14 @@
                 
                 const timeStr = currentTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
                 
-                // 핵심 로직: 여러 명이면 '자녀', 한 명이면 '이름'
-                const displayName = targets.length > 1 ? "자녀" : targets[0].name;
+                // ✅ 수정: 여러 명일 땐 빈칸, 한 명일 땐 이름
+                const displayName = targets.length > 1 ? "" : targets[0].name;
                 
                 const msg = tp.content
                     .replace(/{이름}/g, displayName)
                     .replace(/{시간}/g, timeStr)
-                    .replace(/{교사}/g, teacherName);
+                    .replace(/{교사}/g, teacherName)
+                    .trim(); // 혹시 모를 앞뒤 공백 제거
 
                 window.location.href = `sms:${nums.join(isIos ? ',' : ';')}${isIos ? '&' : '?'}body=${encodeURIComponent(msg)}`;
             };
@@ -127,7 +128,7 @@
                 <div className="flex flex-col h-full bg-slate-50 relative">
                     {showInstallBtn && (
                         <div className="bg-slate-900 text-white p-3 flex justify-between items-center z-[100] animate-in">
-                            <span className="text-xs font-bold ml-2">📲 앱으로 설치하면 더 빠르고 안정적이에요!</span>
+                            <span className="text-xs font-bold ml-2">📲 앱 설치로 오프라인에서도 안정적으로!</span>
                             <button onClick={() => { deferredPrompt.prompt(); setShowInstallBtn(false); }} className="bg-blue-600 px-4 py-1.5 rounded-xl text-xs font-black mr-2 shadow-lg">설치</button>
                         </div>
                     )}
@@ -140,9 +141,9 @@
                         <input value={teacherName} onChange={e => setTeacherName(e.target.value)} className="bg-white/10 p-3 rounded-2xl w-full border-none outline-none font-bold placeholder:text-blue-100 shadow-inner" />
                     </header>
 
-                    <nav className="flex border-b bg-white z-10 flex-shrink-0">
-                        <button onClick={() => setActiveTab('list')} className={`flex-1 py-4 text-sm font-bold ${activeTab === 'list' ? 'active-tab' : 'text-slate-300'}`}>명단</button>
-                        <button onClick={() => setActiveTab('templates')} className={`flex-1 py-4 text-sm font-bold ${activeTab === 'templates' ? 'active-tab' : 'text-slate-300'}`}>문구</button>
+                    <nav className="flex border-b bg-white z-10 flex-shrink-0 font-bold">
+                        <button onClick={() => setActiveTab('list')} className={`flex-1 py-4 text-sm ${activeTab === 'list' ? 'active-tab' : 'text-slate-300'}`}>명단</button>
+                        <button onClick={() => setActiveTab('templates')} className={`flex-1 py-4 text-sm ${activeTab === 'templates' ? 'active-tab' : 'text-slate-300'}`}>문구</button>
                     </nav>
 
                     <main className="flex-1 overflow-y-auto no-scrollbar p-4 pb-64">
@@ -196,7 +197,6 @@
                         )}
                     </main>
 
-                    {/* ✅ 단체 발송 바 (중앙 하단 고정) */}
                     {selectedIds.length > 0 && activeTab === 'list' && (
                         <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-slate-900/95 backdrop-blur-xl p-6 pb-10 rounded-t-[40px] shadow-2xl z-[60] slide-up border-t border-white/10">
                             <div className="flex justify-between items-center mb-6 text-white px-2">
@@ -251,9 +251,7 @@
         root.render(<App />);
 
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(() => {});
-            });
+            navigator.serviceWorker.register('./sw.js').catch(() => {});
         }
     </script>
 </body>
