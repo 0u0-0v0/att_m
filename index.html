@@ -11,7 +11,7 @@
     <link rel="apple-touch-icon" href="icon-192.png">
     
     <style>
-        /* ✅ 민산스(MinSans) 폰트 전체 적용 */
+        /* ✅ 민산스(MinSans) 모든 굵기 설정 */
         @font-face { font-family: 'MinSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/MinSans-Thin.woff') format('woff'); font-weight: 100; font-display: swap; }
         @font-face { font-family: 'MinSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2508-1@1.0/MinSans-ExtraLight.woff2') format('woff2'); font-weight: 200; font-display: swap; }
         @font-face { font-family: 'MinSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/MinSans-Light.woff') format('woff'); font-weight: 300; font-display: swap; }
@@ -22,18 +22,25 @@
         @font-face { font-family: 'MinSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2508-1@1.0/MinSans-ExtraBold.woff2') format('woff2'); font-weight: 800; font-display: swap; }
         @font-face { font-family: 'MinSans'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/MinSans-Black.woff') format('woff'); font-weight: 900; font-display: swap; }
 
+        /* ✅ 당겨서 새로고침 방지 및 기본 레이아웃 */
         html, body { 
-            overscroll-behavior-y: contain; /* 새로고침 방지 */
-            height: 100%;
-            overflow: hidden;
-            font-family: 'MinSans', sans-serif;
+            overscroll-behavior-y: contain; 
+            height: 100%; width: 100%; overflow: hidden;
+            font-family: 'MinSans', -apple-system, sans-serif;
+            background-color: #f8fafc;
         }
 
-        body { background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
-        #root { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        body { -webkit-tap-highlight-color: transparent; }
         
+        /* ✅ 흰 화면 방지 배경색 지정 */
+        #root { 
+            height: 100%; width: 100%; overflow-y: auto; 
+            background-color: #f8fafc; 
+            display: block;
+        }
+
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .active-tab { position: relative; color: #2563eb; }
+        .active-tab { position: relative; color: #2563eb; font-weight: 700; }
         .active-tab::after { content: ''; position: absolute; bottom: -2px; left: 0; width: 100%; height: 3px; background-color: #2563eb; border-radius: 10px; }
         
         .animate-in { animation: fadeIn 0.3s ease-out forwards; }
@@ -52,12 +59,19 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background-color:#f8fafc;">
+            <div style="width:40px; height:40px; border:4px solid #e2e8f0; border-top:4px solid #2563eb; border-radius:50%; animation:spin 1s linear infinite; margin-bottom:15px;"></div>
+            <div style="color:#64748b; font-size:14px; font-weight:500;">출결 매니저를 불러오고 있습니다...</div>
+        </div>
+    </div>
+    <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
         function App() {
+            // --- 데이터 상태 ---
             const [groups, setGroups] = useState(() => JSON.parse(localStorage.getItem('att_groups')) || ['1반']);
             const [activeGroupId, setActiveGroupId] = useState(() => localStorage.getItem('att_active_group') || '전체');
             const [students, setStudents] = useState(() => JSON.parse(localStorage.getItem('att_students')) || []);
@@ -67,14 +81,16 @@
             ]);
             const [teacherName, setTeacherName] = useState(localStorage.getItem('att_teacher_name') || '정유안 선생님');
             
+            // --- UI 상태 ---
             const [activeTab, setActiveTab] = useState('list');
             const [searchQuery, setSearchQuery] = useState('');
             const [selectedIds, setSelectedIds] = useState([]);
             const [currentTime, setCurrentTime] = useState(new Date());
-            const [modalMode, setModalMode] = useState(null); 
+            const [modalMode, setModalMode] = useState(null); // 'view' | 'edit' | 'add' | null
             const [targetStudent, setTargetStudent] = useState(null);
             const [showGroupModal, setShowGroupModal] = useState(false);
 
+            // PWA 설치 버튼 제어
             const [deferredPrompt, setDeferredPrompt] = useState(null);
             const [showInstallBtn, setShowInstallBtn] = useState(false);
 
@@ -86,6 +102,7 @@
                 });
             }, []);
 
+            // 로컬 스토리지 동기화
             useEffect(() => {
                 localStorage.setItem('att_groups', JSON.stringify(groups));
                 localStorage.setItem('att_active_group', activeGroupId);
@@ -100,30 +117,35 @@
             }, []);
 
             const filteredStudents = useMemo(() => {
-                return students.filter(s => (activeGroupId === '전체' || s.group === activeGroupId) && s.name.includes(searchQuery))
-                .sort((a, b) => a.name.localeCompare(b.name));
+                return students.filter(s => 
+                    (activeGroupId === '전체' || s.group === activeGroupId) && 
+                    s.name.includes(searchQuery)
+                ).sort((a, b) => a.name.localeCompare(b.name));
             }, [students, activeGroupId, searchQuery]);
 
+            // 발송 로직
             const sendSMS = (targets, tp) => {
                 if (targets.length === 0) return;
                 const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
                 const nums = [];
                 targets.forEach(s => {
-                    const t = s.activeTargets || { self: true };
+                    const t = s.activeTargets || { self: true, father: false, mother: false };
                     if (t.self && s.self) nums.push(s.self.replace(/[^0-9*]/g, ''));
                     if (t.father && s.father) nums.push(s.father.replace(/[^0-9*]/g, ''));
                     if (t.mother && s.mother) nums.push(s.mother.replace(/[^0-9*]/g, ''));
                 });
                 if (nums.length === 0) return alert("발송할 번호가 없습니다.");
-                const msg = tp.content.replace(/{이름}/g, targets.length > 1 ? `${targets[0].name} 외 ${targets.length-1}명` : targets[0].name).replace(/{시간}/g, currentTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })).replace(/{교사}/g, teacherName);
+                const timeStr = currentTime.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+                const msg = tp.content.replace(/{이름}/g, targets.length > 1 ? `${targets[0].name} 외 ${targets.length-1}명` : targets[0].name).replace(/{시간}/g, timeStr).replace(/{교사}/g, teacherName);
                 window.location.href = `sms:${nums.join(isIos ? ',' : ';')}${isIos ? '&' : '?'}body=${encodeURIComponent(msg)}`;
             };
 
             return (
                 <div className="flex flex-col h-full bg-slate-50 relative">
+                    {/* 설치 안내 바 */}
                     {showInstallBtn && (
-                        <div className="bg-slate-900 text-white p-3 flex justify-between items-center z-[100]">
-                            <span className="text-xs font-bold ml-2">📲 앱으로 설치하면 더 편리해요!</span>
+                        <div className="bg-slate-900 text-white p-3 flex justify-between items-center z-[100] animate-in">
+                            <span className="text-xs font-bold ml-2">📲 앱으로 설치하면 훨씬 빠르고 안정적이에요!</span>
                             <button onClick={() => { deferredPrompt.prompt(); setShowInstallBtn(false); }} className="bg-blue-600 px-4 py-1.5 rounded-xl text-xs font-black mr-2 shadow-lg">설치</button>
                         </div>
                     )}
@@ -133,7 +155,7 @@
                             <h1 style={{fontWeight: 900}}>Attendance Pro</h1>
                             <span className="text-[10px] bg-white/20 px-2 py-1 rounded-full font-bold">{currentTime.toLocaleTimeString()}</span>
                         </div>
-                        <input value={teacherName} onChange={e => setTeacherName(e.target.value)} className="bg-white/10 p-3 rounded-2xl w-full border-none outline-none font-bold placeholder:text-blue-100 shadow-inner" />
+                        <input value={teacherName} onChange={e => setTeacherName(e.target.value)} className="bg-white/10 p-3 rounded-2xl w-full border-none outline-none font-bold placeholder:text-blue-100 shadow-inner" placeholder="교사 성함" />
                     </header>
 
                     <nav className="flex border-b bg-white z-10 flex-shrink-0">
@@ -146,12 +168,15 @@
                             <div className="animate-in space-y-4">
                                 <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 items-center">
                                     <button onClick={() => setShowGroupModal(true)} className="flex-shrink-0 w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center shadow-lg"><i className="fa-solid fa-cog"></i></button>
-                                    <button onClick={() => { if(selectedIds.length === filteredStudents.length) setSelectedIds([]); else setSelectedIds(filteredStudents.map(s => s.id)); }} className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md ${selectedIds.length > 0 && selectedIds.length === filteredStudents.length ? 'bg-blue-600 text-white' : 'bg-white text-slate-400 border'}`}><i className="fa-solid fa-check-double text-xs"></i></button>
+                                    <button onClick={() => { if(selectedIds.length === filteredStudents.length) setSelectedIds([]); else setSelectedIds(filteredStudents.map(s => s.id)); }} className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center shadow-md transition-colors ${selectedIds.length > 0 && selectedIds.length === filteredStudents.length ? 'bg-blue-600 text-white' : 'bg-white text-slate-400 border'}`}>
+                                        <i className="fa-solid fa-check-double text-xs"></i>
+                                    </button>
                                     {['전체', ...groups].map(g => (
                                         <button key={g} onClick={() => { setActiveGroupId(g); setSelectedIds([]); }} className={`flex-shrink-0 px-5 py-2.5 rounded-xl text-[11px] font-black transition-all ${activeGroupId === g ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-400 border'}`}>{g}</button>
                                     ))}
                                 </div>
                                 <input placeholder="학생 이름 검색" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full px-4 py-3 rounded-2xl shadow-sm outline-none border-none font-medium text-sm" />
+                                
                                 <div className="space-y-3">
                                     {filteredStudents.map(s => (
                                         <div key={s.id} className={`bg-white p-4 rounded-3xl shadow-sm flex flex-col gap-3 border-2 transition-all ${selectedIds.includes(s.id) ? 'border-blue-500 ring-4 ring-blue-50' : 'border-transparent'}`}>
@@ -159,7 +184,7 @@
                                                 <div onClick={() => setSelectedIds(p => p.includes(s.id)?p.filter(id=>id!==s.id):[...p,s.id])} className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center flex-shrink-0 ${selectedIds.includes(s.id)?'bg-blue-600 border-blue-600 text-white':'border-slate-100 bg-slate-50'}`}>{selectedIds.includes(s.id) && <i className="fa-solid fa-check text-xs"></i>}</div>
                                                 <div className="flex-1 truncate" onClick={() => { setTargetStudent(s); setModalMode('view'); }}>
                                                     <div className="font-bold text-slate-800 text-sm">{s.name}</div>
-                                                    {s.memo && <div className="text-[9px] text-blue-500 font-medium truncate mt-0.5">{s.memo}</div>}
+                                                    {s.memo && <div className="text-[9px] text-blue-500 font-medium truncate mt-0.5 tracking-tight">{s.memo}</div>}
                                                 </div>
                                                 <div className="flex flex-wrap gap-1 justify-end max-w-[150px]">
                                                     <button onClick={() => window.location.href = `tel:${s.self?.replace(/[^0-9*]/g, '')}`} className="w-8 h-8 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center text-[10px]"><i className="fa-solid fa-phone"></i></button>
@@ -170,7 +195,7 @@
                                             </div>
                                             <div className="flex gap-1.5 pt-1 border-t border-slate-50">
                                                 {[{k:'self',l:'본인'},{k:'father',l:'부'},{k:'mother',l:'모'}].map(t => (
-                                                    <button key={t.k} onClick={() => { const newT = {...(s.activeTargets || {self:true}), [t.k]: !(s.activeTargets?.[t.k])}; setStudents(students.map(st => st.id === s.id ? {...st, activeTargets: newT} : st)); }} className={`flex-1 py-1.5 rounded-xl text-[10px] font-bold transition-all ${(s.activeTargets?.[t.k] || (t.k==='self' && !s.activeTargets)) ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-400'}`}>{t.l}</button>
+                                                    <button key={t.k} onClick={() => { const newT = {...(s.activeTargets || {self:true}), [t.k]: !(s.activeTargets?.[t.k])}; setStudents(students.map(st => st.id === s.id ? {...st, activeTargets: newT} : st)); }} className={`flex-1 py-1.5 rounded-xl text-[10px] font-bold transition-all ${(s.activeTargets?.[t.k] || (t.k==='self' && !s.activeTargets)) ? 'bg-slate-800 text-white shadow-sm' : 'bg-slate-100 text-slate-400'}`}>{t.l}</button>
                                                 ))}
                                             </div>
                                         </div>
@@ -178,36 +203,129 @@
                                 </div>
                             </div>
                         )}
-                        {/* 문구 탭, 모달 등 생략 (기존 기능 유지) */}
+
+                        {activeTab === 'templates' && (
+                            <div className="animate-in space-y-4 pb-10">
+                                {templates.map(tp => (
+                                    <div key={tp.id} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
+                                        <input value={tp.title} onChange={e => setTemplates(templates.map(t=>t.id===tp.id?{...t,title:e.target.value}:t))} className="w-full font-black text-blue-600 border-b pb-1 mb-3 outline-none border-slate-50 focus:border-blue-200" />
+                                        <textarea value={tp.content} onChange={e => setTemplates(templates.map(t=>t.id===tp.id?{...t,content:e.target.value}:t))} className="w-full text-xs text-slate-500 bg-slate-50 p-4 rounded-2xl min-h-[100px] outline-none leading-relaxed" />
+                                        <button onClick={() => confirm('삭제?') && setTemplates(templates.filter(t=>t.id!==tp.id))} className="mt-3 text-rose-500 text-[10px] font-bold">삭제</button>
+                                    </div>
+                                ))}
+                                <button onClick={() => setTemplates([...templates,{id:'t'+Date.now(),title:'새 문구',content:''}])} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-3xl text-slate-300 font-bold active:bg-white transition-colors">+ 추가</button>
+                            </div>
+                        )}
                     </main>
 
-                    {/* 단체 발송 바 */}
+                    {/* ✅ 단체 발송 바 (중앙 하단 고정) */}
                     {selectedIds.length > 0 && activeTab === 'list' && (
                         <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-slate-900/95 backdrop-blur-xl p-6 pb-10 rounded-t-[40px] shadow-2xl z-[60] slide-up border-t border-white/10">
                             <div className="flex justify-between items-center mb-6 text-white px-2">
                                 <span className="font-bold text-lg">{selectedIds.length}명 선택됨</span>
                                 <div className="flex gap-2">
-                                    <button onClick={() => { if(confirm('삭제?')) { setStudents(students.filter(s => !selectedIds.includes(s.id))); setSelectedIds([]); } }} className="bg-rose-500/20 text-rose-400 px-4 py-2 rounded-2xl text-[11px] font-bold">삭제</button>
+                                    <button onClick={() => { if(confirm('삭제할까요?')) { setStudents(students.filter(s => !selectedIds.includes(s.id))); setSelectedIds([]); } }} className="bg-rose-500/20 text-rose-400 px-4 py-2 rounded-2xl text-[11px] font-bold">삭제</button>
                                     <button onClick={() => setSelectedIds([])} className="bg-white/10 px-4 py-2 rounded-2xl text-[11px] font-bold">취소</button>
                                 </div>
                             </div>
-                            <div className="flex flex-wrap gap-2.5 justify-center overflow-y-auto max-h-40">
+                            <div className="flex flex-wrap gap-2.5 justify-center overflow-y-auto max-h-40 no-scrollbar">
                                 {templates.map(tp => (
-                                    <button key={tp.id} onClick={() => sendSMS(students.filter(s=>selectedIds.includes(s.id)), tp)} className="bg-blue-600 text-white px-6 py-3.5 rounded-2xl font-bold text-xs shadow-lg">{tp.title} 발송</button>
+                                    <button key={tp.id} onClick={() => sendSMS(students.filter(s=>selectedIds.includes(s.id)), tp)} className="bg-blue-600 text-white px-6 py-3.5 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all">{tp.title} 발송</button>
                                 ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'list' && selectedIds.length === 0 && (
+                        <button onClick={() => { setTargetStudent(null); setModalMode('add'); }} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center text-xl z-50 active:scale-90 transition-transform"><i className="fa-solid fa-plus"></i></button>
+                    )}
+
+                    {/* ✅ 통합 정보 모달 (조회/수정/추가) */}
+                    {modalMode && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-6">
+                            <div className="bg-white w-full rounded-[44px] p-8 animate-in shadow-2xl overflow-y-auto max-h-[90vh] border border-white/20">
+                                {modalMode === 'view' ? (
+                                    <div className="space-y-6 text-center">
+                                        <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">{targetStudent.group}</span>
+                                        <h3 className="text-2xl font-black text-slate-800 mt-2">{targetStudent.name}</h3>
+                                        <div className="space-y-3 text-left">
+                                            <div className="bg-slate-50 p-4 rounded-3xl"><div className="text-[10px] font-black text-slate-400 mb-1">본인 번호</div><div className="text-lg font-bold text-slate-700">{targetStudent.self || '-'}</div></div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="bg-slate-50 p-4 rounded-3xl"><div className="text-[10px] font-black text-slate-400 mb-1">부 번호</div><div className="text-sm font-bold text-slate-700">{targetStudent.father || '-'}</div></div>
+                                                <div className="bg-slate-50 p-4 rounded-3xl"><div className="text-[10px] font-black text-slate-400 mb-1">모 번호</div><div className="text-sm font-bold text-slate-700">{targetStudent.mother || '-'}</div></div>
+                                            </div>
+                                            <div className="bg-slate-50 p-4 rounded-3xl"><div className="text-[10px] font-black text-slate-400 mb-1">메모 (비고)</div><div className="text-sm font-medium text-slate-600 whitespace-pre-wrap leading-relaxed">{targetStudent.memo || '내용 없음'}</div></div>
+                                        </div>
+                                        <div className="flex flex-col gap-2 pt-4">
+                                            <button onClick={() => setModalMode('edit')} className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black shadow-lg">정보 수정하기</button>
+                                            <button onClick={() => setModalMode(null)} className="w-full font-bold text-slate-400 py-4">닫기</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4 text-xs font-bold">
+                                        <h3 className="text-xl font-black mb-6 text-blue-600 text-center">{modalMode === 'edit' ? '정보 수정' : '학생 직접 추가'}</h3>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <select className="w-full p-4 bg-slate-50 rounded-2xl outline-none" value={targetStudent?.group || (activeGroupId === '전체' ? groups[0] : activeGroupId)} onChange={e => setTargetStudent({...targetStudent, group: e.target.value})}>
+                                                {groups.map(g => <option key={g} value={g}>{g}</option>)}
+                                            </select>
+                                            <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-blue-500 font-bold" value={targetStudent?.name || ''} onChange={e => setTargetStudent({...targetStudent, name: e.target.value})} placeholder="이름" />
+                                        </div>
+                                        <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-medium" value={targetStudent?.self || ''} onChange={e => setTargetStudent({...targetStudent, self: e.target.value})} placeholder="본인 번호" />
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-medium" value={targetStudent?.father || ''} onChange={e => setTargetStudent({...targetStudent, father: e.target.value})} placeholder="부 번호" />
+                                            <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-medium" value={targetStudent?.mother || ''} onChange={e => setTargetStudent({...targetStudent, mother: e.target.value})} placeholder="모 번호" />
+                                        </div>
+                                        <textarea className="w-full p-4 bg-slate-50 rounded-2xl outline-none min-h-[80px] font-medium" value={targetStudent?.memo || ''} onChange={e => setTargetStudent({...targetStudent, memo: e.target.value})} placeholder="특이사항 메모" />
+                                        <div className="flex flex-col gap-2 pt-4">
+                                            <button onClick={() => { if(!targetStudent.name) return alert('이름 필수'); const final = { ...targetStudent, group: targetStudent?.group || (activeGroupId === '전체' ? groups[0] : activeGroupId), activeTargets: targetStudent?.activeTargets || { self: true, father: false, mother: false } }; if(final.id) setStudents(students.map(st => st.id === final.id ? final : st)); else setStudents([...students, {...final, id: Date.now()}]); setModalMode(null); }} className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black shadow-lg">저장하기</button>
+                                            <div className="flex gap-2">
+                                                {modalMode === 'edit' && <button onClick={() => { if(confirm('이 학생을 명단에서 삭제할까요?')) { setStudents(students.filter(s => s.id !== targetStudent.id)); setModalMode(null); } }} className="flex-1 bg-rose-50 text-rose-500 font-bold py-4 rounded-3xl border border-rose-100 text-xs">학생 삭제</button>}
+                                                <button onClick={() => setModalMode(modalMode === 'edit' ? 'view' : null)} className="flex-1 font-bold text-slate-400 py-4 text-xs">취소</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 학급 관리 모달 */}
+                    {showGroupModal && (
+                        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+                            <div className="bg-white w-full rounded-[44px] p-8 animate-in max-h-[85vh] flex flex-col shadow-2xl">
+                                <h3 className="text-xl font-black mb-1 text-blue-600 text-center">학급 관리</h3>
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 mt-6">
+                                    {groups.map(g => (
+                                        <div key={g} className="flex items-center gap-3 bg-slate-50 p-4 rounded-3xl border border-slate-100">
+                                            <span className="flex-1 font-black text-slate-700 text-sm">{g}</span>
+                                            <button onClick={() => { const n = prompt("새 반 이름", g); if(n && n !== g) { setGroups(groups.map(x => x === g ? n : x)); setStudents(students.map(s => s.group === g ? {...s, group: n} : s)); } }} className="w-9 h-9 bg-white text-blue-600 rounded-xl shadow-sm flex items-center justify-center text-xs"><i className="fa-solid fa-pen"></i></button>
+                                            <button onClick={() => { if(groups.length > 1 && confirm(`'${g}' 반을 삭제할까요?`)) { setGroups(groups.filter(x => x !== g)); setStudents(students.filter(s => s.group !== g)); setActiveGroupId('전체'); } }} className="w-9 h-9 bg-rose-50 text-rose-500 rounded-xl shadow-sm flex items-center justify-center text-xs"><i className="fa-solid fa-trash-can"></i></button>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => { const n = prompt('새로운 반 이름을 입력하세요'); if(n) setGroups([...groups, n]); }} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 font-bold text-xs mt-4">+ 학급 추가</button>
+                                </div>
+                                <button onClick={() => setShowGroupModal(false)} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black mt-6">닫기</button>
                             </div>
                         </div>
                     )}
                 </div>
             );
         }
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+
+        // 서비스 워커 등록 후 렌더링
+        const init = () => {
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
+        };
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').then(reg => console.log('성공')).catch(err => console.log('실패'));
+                navigator.serviceWorker.register('./sw.js', { scope: './' })
+                    .then(() => { console.log('SW Registered'); init(); })
+                    .catch(() => { init(); });
             });
+        } else {
+            init();
         }
     </script>
 </body>
