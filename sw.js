@@ -1,5 +1,6 @@
-const CACHE_NAME = 'attendance-pro-v9';
+const CACHE_NAME = 'attendance-pro-v10';
 
+// ✅ 모든 라이브러리와 민산스 폰트 9종을 캐시에 포함
 const ASSETS = [
   './',
   './index.html',
