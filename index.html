@@ -32,6 +32,13 @@
         @keyframes slideUp { from { transform: translate(-50%, 100%); } to { transform: translate(-50%, 0); } }
         input, button, textarea, select { font-family: 'MinSans', sans-serif; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* ✅ 로딩 화면 스타일 (root 바깥에 위치) */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background-color: #f8fafc; z-index: 9999;
+        }
     </style>
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -41,12 +48,12 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <div id="root">
-        <div id="loading-screen" style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh;">
-            <div style="width:40px; height:40px; border:4px solid #e2e8f0; border-top:4px solid #2563eb; border-radius:50%; animation:spin 1s linear infinite; margin-bottom:15px;"></div>
-            <div style="color:#64748b; font-size:14px; font-weight:500;">출결 시스템을 불러오는 중입니다...</div>
-        </div>
+    <div id="loading-overlay">
+        <div style="width:40px; height:40px; border:4px solid #e2e8f0; border-top:4px solid #2563eb; border-radius:50%; animation:spin 1s linear infinite; margin-bottom:15px;"></div>
+        <div style="color:#64748b; font-size:14px; font-weight:500;">출결 시스템을 불러오는 중입니다...</div>
     </div>
+
+    <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
@@ -72,10 +79,10 @@
             const [showInstallBtn, setShowInstallBtn] = useState(false);
             const [deferredPrompt, setDeferredPrompt] = useState(null);
 
-            // ✅ 로딩 화면 제거 로직
+            // ✅ 앱이 완전히 준비되면 로딩 화면 제거
             useEffect(() => {
-                const loader = document.getElementById('loading-screen');
-                if (loader) loader.style.display = 'none';
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) overlay.style.display = 'none';
             }, []);
 
             useEffect(() => {
@@ -100,7 +107,7 @@
                 .sort((a, b) => a.name.localeCompare(b.name));
             }, [students, activeGroupId, searchQuery]);
 
-            // ✅ 태그 삽입 기능 (복구됨)
+            // ✅ 태그 삽입 기능 (textarea ID를 정확히 찾아 삽입)
             const insertTag = (templateId, tag) => {
                 const el = document.getElementById(`textarea-${templateId}`);
                 if (!el) return;
@@ -146,7 +153,7 @@
                     {showInstallBtn && (
                         <div className="bg-slate-900 text-white p-3 flex justify-between items-center z-[100] animate-in text-xs font-bold">
                             <span className="ml-2">📲 앱 설치로 오프라인 사용 환경 강화!</span>
-                            <button onClick={() => { deferredPrompt.prompt(); setShowInstallBtn(false); }} className="bg-blue-600 px-4 py-1.5 rounded-xl font-black mr-2 shadow-lg">설치</button>
+                            <button onClick={() => { deferredPrompt.prompt(); setShowInstallBtn(false); }} className="bg-blue-600 px-4 py-1.5 rounded-xl text-xs font-black mr-2 shadow-lg">설치</button>
                         </div>
                     )}
 
@@ -169,7 +176,7 @@
                                 <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 items-center">
                                     <button onClick={() => setShowGroupModal(true)} className="flex-shrink-0 w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center shadow-lg"><i className="fa-solid fa-cog"></i></button>
                                     <button onClick={() => confirm('기록을 지울까요?') && setStudents(students.map(s => ({...s, lastSent: null})))} className="flex-shrink-0 w-10 h-10 rounded-xl bg-white border border-slate-200 text-slate-400 flex items-center justify-center shadow-sm"><i className="fa-solid fa-rotate-right text-xs"></i></button>
-                                    <button onClick={() => { if(selectedIds.length === filteredStudents.length) setSelectedIds([]); else setSelectedIds(filteredStudents.map(s => s.id)); }} className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center shadow-md ${selectedIds.length > 0 && selectedIds.length === filteredStudents.length ? 'bg-blue-600 text-white' : 'bg-white text-slate-400 border'}`}><i className="fa-solid fa-check-double text-xs"></i></button>
+                                    <button onClick={() => { if(selectedIds.length === filteredStudents.length) setSelectedIds([]); else setSelectedIds(filteredStudents.map(s => s.id)); }} className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center shadow-md transition-colors ${selectedIds.length > 0 && selectedIds.length === filteredStudents.length ? 'bg-blue-600 text-white' : 'bg-white text-slate-400 border'}`}><i className="fa-solid fa-check-double text-xs"></i></button>
                                     {['전체', ...groups].map(g => (
                                         <button key={g} onClick={() => { setActiveGroupId(g); setSelectedIds([]); }} className={`flex-shrink-0 px-5 py-2.5 rounded-xl text-[11px] font-black transition-all ${activeGroupId === g ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-400 border'}`}>{g}</button>
                                     ))}
@@ -210,7 +217,6 @@
                                     <div key={tp.id} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
                                         <input value={tp.title} onChange={e => setTemplates(templates.map(t=>t.id===tp.id?{...t,title:e.target.value}:t))} className="w-full font-black text-blue-600 border-b pb-1 mb-3 outline-none border-slate-50 focus:border-blue-200" />
                                         
-                                        {/* ✅ 태그 삽입 버튼 영역 (복구됨) */}
                                         <div className="flex gap-1 mb-3">
                                             {['{이름}', '{교사}', '{시간}'].map(tag => (
                                                 <button key={tag} onClick={() => insertTag(tp.id, tag)} className="bg-slate-100 text-[10px] px-2.5 py-1.5 rounded-xl font-black text-slate-500 active:bg-slate-200 shadow-sm border border-slate-50">
@@ -259,7 +265,7 @@
                                         <div className="space-y-3 text-left">
                                             <div className="bg-slate-50 p-4 rounded-3xl"><div className="text-[10px] font-black text-slate-400 mb-1">본인 번호</div><div className="text-lg font-bold text-slate-700">{targetStudent.self || '-'}</div></div>
                                             <div className="grid grid-cols-2 gap-3"><div className="bg-slate-50 p-4 rounded-3xl"><div className="text-[10px] font-black text-slate-400 mb-1">부 번호</div><div className="text-sm font-bold text-slate-700">{targetStudent.father || '-'}</div></div><div className="bg-slate-50 p-4 rounded-3xl"><div className="text-[10px] font-black text-slate-400 mb-1">모 번호</div><div className="text-sm font-bold text-slate-700">{targetStudent.mother || '-'}</div></div></div>
-                                            <div className="bg-slate-50 p-4 rounded-3xl"><div className="text-[10px] font-black text-slate-400 mb-1">메모</div><div className="text-sm font-medium text-slate-600 whitespace-pre-wrap">{targetStudent.memo || '내용 없음'}</div></div>
+                                            <div className="bg-slate-50 p-4 rounded-3xl"><div className="text-[10px] font-black text-slate-400 mb-1">메모</div><div className="text-sm font-medium text-slate-600 whitespace-pre-wrap leading-relaxed">{targetStudent.memo || '내용 없음'}</div></div>
                                         </div>
                                         <div className="flex flex-col gap-2 pt-4"><button onClick={() => setModalMode('edit')} className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black shadow-lg">수정하기</button><button onClick={() => setModalMode(null)} className="w-full font-bold text-slate-400 py-4">닫기</button></div>
                                     </div>
@@ -267,10 +273,29 @@
                                     <div className="space-y-4 text-xs font-bold">
                                         <h3 className="text-xl font-black mb-6 text-blue-600 text-center">{modalMode === 'edit' ? '정보 수정' : '학생 직접 추가'}</h3>
                                         <div className="grid grid-cols-2 gap-2"><select className="w-full p-4 bg-slate-50 rounded-2xl outline-none" value={targetStudent?.group || (activeGroupId === '전체' ? groups[0] : activeGroupId)} onChange={e => setTargetStudent({...targetStudent, group: e.target.value})}>{groups.map(g => <option key={g} value={g}>{g}</option>)}</select><input className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-blue-500 font-bold" value={targetStudent?.name || ''} onChange={e => setTargetStudent({...targetStudent, name: e.target.value})} placeholder="이름" /></div>
-                                        <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-medium" value={targetStudent?.self || ''} onChange={e => setTargetStudent({...targetStudent, self: e.target.value})} placeholder="본인 번호" /><div className="grid grid-cols-2 gap-2"><input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-medium" value={targetStudent?.father || ''} onChange={e => setTargetStudent({...targetStudent, father: e.target.value})} placeholder="부 번호" /><input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-medium" value={targetStudent?.mother || ''} onChange={e => setTargetStudent({...targetStudent, mother: e.target.value})} placeholder="모 번호" /></div><textarea className="w-full p-4 bg-slate-50 rounded-2xl outline-none min-h-[80px]" value={targetStudent?.memo || ''} onChange={e => setTargetStudent({...targetStudent, memo: e.target.value})} placeholder="메모" />
+                                        <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-medium" value={targetStudent?.self || ''} onChange={e => setTargetStudent({...targetStudent, self: e.target.value})} placeholder="본인 번호" /><div className="grid grid-cols-2 gap-2"><input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-medium" value={targetStudent?.father || ''} onChange={e => setTargetStudent({...targetStudent, father: e.target.value})} placeholder="부 번호" /><input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-medium" value={targetStudent?.mother || ''} onChange={e => setTargetStudent({...targetStudent, mother: e.target.value})} placeholder="모 번호" /></div><textarea className="w-full p-4 bg-slate-50 rounded-2xl outline-none min-h-[80px] font-medium" value={targetStudent?.memo || ''} onChange={e => setTargetStudent({...targetStudent, memo: e.target.value})} placeholder="메모" />
                                         <div className="flex flex-col gap-2 pt-4"><button onClick={() => { if(!targetStudent.name) return alert('이름 필수'); const final = { ...targetStudent, group: targetStudent?.group || (activeGroupId === '전체' ? groups[0] : activeGroupId), activeTargets: targetStudent?.activeTargets || { self: true, father: false, mother: false } }; if(final.id) setStudents(students.map(st => st.id === final.id ? final : st)); else setStudents([...students, {...final, id: Date.now()}]); setModalMode(null); }} className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black shadow-lg">저장</button><div className="flex gap-2">{modalMode === 'edit' && <button onClick={() => { if(confirm('삭제?')) { setStudents(students.filter(s => s.id !== targetStudent.id)); setModalMode(null); } }} className="flex-1 bg-rose-50 text-rose-500 font-bold py-4 rounded-3xl border border-rose-100">삭제</button>}<button onClick={() => setModalMode(modalMode === 'edit' ? 'view' : null)} className="flex-1 font-bold text-slate-400 py-4 text-xs">취소</button></div></div>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    )}
+
+                    {showGroupModal && (
+                        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-xs text-sans">
+                            <div className="bg-white w-full rounded-[44px] p-8 animate-in max-h-[85vh] flex flex-col shadow-2xl">
+                                <h3 className="text-xl font-black mb-1 text-blue-600 text-center">학급 관리</h3>
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 mt-6">
+                                    {groups.map(g => (
+                                        <div key={g} className="flex items-center gap-3 bg-slate-50 p-4 rounded-3xl border border-slate-100">
+                                            <span className="flex-1 font-black text-slate-700 text-sm">{g}</span>
+                                            <button onClick={() => { const n = prompt("새 이름", g); if(n && n !== g) { setGroups(groups.map(x => x === g ? n : x)); setStudents(students.map(s => s.group === g ? {...s, group: n} : s)); } }} className="w-9 h-9 bg-white text-blue-600 rounded-xl shadow-sm flex items-center justify-center text-xs"><i className="fa-solid fa-pen"></i></button>
+                                            <button onClick={() => { if(groups.length > 1 && confirm(`'${g}' 반을 삭제할까요?`)) { setGroups(groups.filter(x => x !== g)); setStudents(students.filter(s => s.group !== g)); setActiveGroupId('전체'); } }} className="w-9 h-9 bg-rose-50 text-rose-500 rounded-xl shadow-sm flex items-center justify-center text-xs"><i className="fa-solid fa-trash-can"></i></button>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => { const n = prompt('새 반 이름'); if(n) setGroups([...groups, n]); }} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 font-bold mt-4">+ 학급 추가</button>
+                                </div>
+                                <button onClick={() => setShowGroupModal(false)} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black mt-6">닫기</button>
                             </div>
                         </div>
                     )}
