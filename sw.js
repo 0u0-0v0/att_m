@@ -1,4 +1,4 @@
-const CACHE_NAME = 'attendance-pro-v12';
+const CACHE_NAME = 'attendance-pro-v13';
 
 const ASSETS = [
   './',
