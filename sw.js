@@ -1,4 +1,4 @@
-const CACHE_NAME = 'attendance-pro-v11'; // 버전을 v11로 올립니다.
+const CACHE_NAME = 'attendance-pro-v12';
 
 const ASSETS = [
   './',
