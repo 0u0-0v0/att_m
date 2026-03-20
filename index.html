@@ -64,7 +64,7 @@
                 { id: 't2', title: '생결 확인', content: '[생결확인] {이름} 학생이 오늘 생리통으로 등교가 어렵다고 합니다. 확인 부탁드리며, 서류 챙겨 보내주세요! - {교사}' },
                 { id: 't3', title: '지각 확인', content: '[지각확인] {이름} 학생이 아직 미등교 상태입니다. 알고 계신지 확인 부탁드립니다! - {교사}' }
             ]);
-            const [teacherName, setTeacherName] = useState(localStorage.getItem('att_teacher_name') || '정유안 선생님');
+            const [teacherName, setTeacherName] = useState(localStorage.getItem('att_teacher_name') || '000');
             
             const [activeTab, setActiveTab] = useState('list');
             const [searchQuery, setSearchQuery] = useState('');
