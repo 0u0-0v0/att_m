@@ -115,9 +115,11 @@
                 }));
             };
 
-            // ✅ 양식 다운로드 및 업로드 로직 복구
+            // ✅ 양식 다운로드 로직 (반, 이름, 본인번호, 부번호, 모번호, 메모 순서)
             const downloadTemplate = () => {
-                const csvContent = "\ufeff이름,학급,본인번호,부번호,모번호,메모\n홍길동,1반,010-1234-5678,010-1111-2222,010-3333-4444,비고내용";
+                const headers = "반,이름,본인번호,부번호,모번호,메모";
+                const example = "1반,홍길동,010-1234-5678,010-1111-2222,010-3333-4444,비고내용";
+                const csvContent = "\ufeff" + headers + "\n" + example;
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement("a");
                 link.href = URL.createObjectURL(blob);
@@ -127,23 +129,49 @@
                 document.body.removeChild(link);
             };
 
+            // ✅ 양식 업로드 로직 (순서: 반, 이름, 본인번호, 부번호, 모번호, 메모)
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (event) => {
-                    const text = event.target.result;
-                    const rows = text.split('\n').slice(1);
-                    const newStudents = rows.map(row => {
-                        const [name, group, self, father, mother, memo] = row.split(',').map(s => s?.trim());
-                        if (!name || !group) return null;
-                        if (!groups.includes(group)) setGroups(prev => [...prev, group]);
-                        return { id: Date.now() + Math.random(), name, group, self, father, mother, memo, activeTargets: { self: true, father: false, mother: false } };
-                    }).filter(Boolean);
-                    setStudents(prev => [...prev, ...newStudents]);
-                    alert(`${newStudents.length}명의 학생이 추가되었습니다.`);
+                    try {
+                        const text = event.target.result;
+                        const rows = text.split(/\r?\n/).filter(row => row.trim() !== '').slice(1);
+                        
+                        let addedCount = 0;
+                        const newGroups = [...groups];
+                        const newStudentsList = rows.map(row => {
+                            const cols = row.split(',').map(s => s?.trim());
+                            // 순서: [0:반, 1:이름, 2:본인번호, 3:부번호, 4:모번호, 5:메모]
+                            const [group, name, self, father, mother, memo] = cols;
+                            
+                            if (!name || !group) return null;
+                            
+                            if (!newGroups.includes(group)) newGroups.push(group);
+                            addedCount++;
+                            
+                            return { 
+                                id: Date.now() + Math.random(), 
+                                name, 
+                                group, 
+                                self: self || '', 
+                                father: father || '', 
+                                mother: mother || '', 
+                                memo: memo || '', 
+                                activeTargets: { self: true, father: false, mother: false } 
+                            };
+                        }).filter(Boolean);
+
+                        setGroups(newGroups);
+                        setStudents(prev => [...prev, ...newStudentsList]);
+                        alert(`${addedCount}명의 학생 정보를 성공적으로 불러왔습니다.`);
+                    } catch (err) {
+                        alert("파일을 읽는 중 오류가 발생했습니다. 양식을 확인해 주세요.");
+                    }
                 };
                 reader.readAsText(file);
+                e.target.value = ''; // 같은 파일 재업로드 가능하도록 초기화
             };
 
             const insertTag = (templateId, tag) => {
@@ -331,7 +359,6 @@
                             <div className="bg-white w-full rounded-[44px] p-8 animate-in max-h-[85vh] flex flex-col shadow-2xl">
                                 <h3 className="text-xl font-black mb-1 text-blue-600 text-center">학급 관리</h3>
                                 
-                                {/* ✅ 양식 다운로드 및 업로드 버튼 추가 */}
                                 <div className="flex gap-2 mt-4">
                                     <button onClick={downloadTemplate} className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-2xl font-bold text-[10px]"><i className="fa-solid fa-download mr-1"></i> 양식 받기</button>
                                     <label className="flex-1 bg-blue-50 text-blue-600 py-3 rounded-2xl font-bold text-[10px] text-center cursor-pointer">
