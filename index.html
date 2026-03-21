@@ -64,7 +64,7 @@
                 { id: 't2', title: '생결 확인', content: '[생결확인] {이름} 학생이 오늘 생리통으로 등교가 어렵다고 합니다. 확인 부탁드리며, 서류 챙겨 보내주세요! - {교사}' },
                 { id: 't3', title: '지각 확인', content: '[지각확인] {이름} 학생이 아직 미등교 상태입니다. 알고 계신지 확인 부탁드립니다! - {교사}' }
             ]);
-            const [teacherName, setTeacherName] = useState(localStorage.getItem('att_teacher_name') || '000');
+            const [teacherName, setTeacherName] = useState(localStorage.getItem('att_teacher_name') || '정유안 선생님');
             
             const [activeTab, setActiveTab] = useState('list');
             const [searchQuery, setSearchQuery] = useState('');
@@ -103,7 +103,6 @@
                 .sort((a, b) => a.name.localeCompare(b.name));
             }, [students, activeGroupId, searchQuery]);
 
-            // ✅ 일괄 대상 설정 로직 개선 (본인+부모 추가)
             const setAllTargets = (type) => {
                 const targetIds = filteredStudents.map(s => s.id);
                 setStudents(prev => prev.map(s => {
@@ -114,6 +113,37 @@
                     }
                     return s;
                 }));
+            };
+
+            // ✅ 양식 다운로드 및 업로드 로직 복구
+            const downloadTemplate = () => {
+                const csvContent = "\ufeff이름,학급,본인번호,부번호,모번호,메모\n홍길동,1반,010-1234-5678,010-1111-2222,010-3333-4444,비고내용";
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.setAttribute("download", "출결매니저_양식.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const text = event.target.result;
+                    const rows = text.split('\n').slice(1);
+                    const newStudents = rows.map(row => {
+                        const [name, group, self, father, mother, memo] = row.split(',').map(s => s?.trim());
+                        if (!name || !group) return null;
+                        if (!groups.includes(group)) setGroups(prev => [...prev, group]);
+                        return { id: Date.now() + Math.random(), name, group, self, father, mother, memo, activeTargets: { self: true, father: false, mother: false } };
+                    }).filter(Boolean);
+                    setStudents(prev => [...prev, ...newStudents]);
+                    alert(`${newStudents.length}명의 학생이 추가되었습니다.`);
+                };
+                reader.readAsText(file);
             };
 
             const insertTag = (templateId, tag) => {
@@ -194,12 +224,11 @@
                                     ))}
                                 </div>
                                 
-                                {/* ✅ 검색창 축소 및 버튼 3종 배치 */}
                                 <div className="flex gap-1.5 items-center">
-                                    <input placeholder="검색" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-24 flex-shrink-0 px-3 py-3 rounded-2xl shadow-sm outline-none border-none font-medium text-[13px]" />
-                                    <button onClick={() => setAllTargets('self')} className="flex-1 bg-slate-700 text-white py-3 rounded-2xl text-[10px] font-black shadow-sm transition-transform active:scale-95">본인</button>
-                                    <button onClick={() => setAllTargets('parents')} className="flex-1 bg-slate-700 text-white py-3 rounded-2xl text-[10px] font-black shadow-sm transition-transform active:scale-95">부모</button>
-                                    <button onClick={() => setAllTargets('both')} className="flex-1 bg-slate-700 text-white py-3 rounded-2xl text-[10px] font-black shadow-sm transition-transform active:scale-95">본인+부모</button>
+                                    <input placeholder="검색" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-20 flex-shrink-0 px-3 py-3 rounded-2xl shadow-sm outline-none border-none font-medium text-[13px]" />
+                                    <button onClick={() => setAllTargets('self')} className="flex-1 bg-slate-700 text-white py-3 rounded-2xl text-[10px] font-black shadow-sm active:scale-95 transition-all">본인</button>
+                                    <button onClick={() => setAllTargets('parents')} className="flex-1 bg-slate-700 text-white py-3 rounded-2xl text-[10px] font-black shadow-sm active:scale-95 transition-all">부모</button>
+                                    <button onClick={() => setAllTargets('both')} className="flex-1 bg-slate-700 text-white py-3 rounded-2xl text-[10px] font-black shadow-sm active:scale-95 transition-all">본인+부모</button>
                                 </div>
 
                                 <div className="space-y-3">
@@ -301,6 +330,16 @@
                         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-xs text-sans">
                             <div className="bg-white w-full rounded-[44px] p-8 animate-in max-h-[85vh] flex flex-col shadow-2xl">
                                 <h3 className="text-xl font-black mb-1 text-blue-600 text-center">학급 관리</h3>
+                                
+                                {/* ✅ 양식 다운로드 및 업로드 버튼 추가 */}
+                                <div className="flex gap-2 mt-4">
+                                    <button onClick={downloadTemplate} className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-2xl font-bold text-[10px]"><i className="fa-solid fa-download mr-1"></i> 양식 받기</button>
+                                    <label className="flex-1 bg-blue-50 text-blue-600 py-3 rounded-2xl font-bold text-[10px] text-center cursor-pointer">
+                                        <i className="fa-solid fa-upload mr-1"></i> 명단 올리기
+                                        <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                                    </label>
+                                </div>
+
                                 <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 mt-6">
                                     {groups.map(g => (
                                         <div key={g} className="flex items-center gap-3 bg-slate-50 p-4 rounded-3xl border border-slate-100">
